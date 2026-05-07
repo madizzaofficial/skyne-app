@@ -3,8 +3,180 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 export interface HealthStatus {
   status: string;
 }
+
+export type AnalyzedIngredientSafetyLevel =
+  (typeof AnalyzedIngredientSafetyLevel)[keyof typeof AnalyzedIngredientSafetyLevel];
+
+export const AnalyzedIngredientSafetyLevel = {
+  safe: "safe",
+  caution: "caution",
+  avoid: "avoid",
+} as const;
+
+export interface AnalyzedIngredient {
+  inci: string;
+  commonName: string;
+  function: string;
+  safetyLevel: AnalyzedIngredientSafetyLevel;
+  isAllergen: boolean;
+  benefits: string[];
+  concerns: string[];
+}
+
+export type ProductAnalysisResultComedogenicRiskLevel =
+  (typeof ProductAnalysisResultComedogenicRiskLevel)[keyof typeof ProductAnalysisResultComedogenicRiskLevel];
+
+export const ProductAnalysisResultComedogenicRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  unknown: "unknown",
+} as const;
+
+export type ProductAnalysisResultIrritationRiskLevel =
+  (typeof ProductAnalysisResultIrritationRiskLevel)[keyof typeof ProductAnalysisResultIrritationRiskLevel];
+
+export const ProductAnalysisResultIrritationRiskLevel = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  unknown: "unknown",
+} as const;
+
+export interface ProductAnalysisResult {
+  summary: string;
+  detectedIngredients: AnalyzedIngredient[];
+  warnings: string[];
+  positivePoints: string[];
+  acneSafetyNotes: string[];
+  sensitiveSkinNotes: string[];
+  fragranceAlcoholNotes: string[];
+  comedogenicRiskLevel: ProductAnalysisResultComedogenicRiskLevel;
+  irritationRiskLevel: ProductAnalysisResultIrritationRiskLevel;
+  confidenceScore: number;
+}
+
+export interface ApiProduct {
+  id: string;
+  barcode?: string | null;
+  name?: string | null;
+  brand?: string | null;
+  brands?: string[] | null;
+  categories?: string[] | null;
+  countries?: string[] | null;
+  ingredientsText?: string | null;
+  ingredientsTags?: string[] | null;
+  allergensTags?: string[] | null;
+  labelsTags?: string[] | null;
+  imageUrl?: string | null;
+  imageFrontUrl?: string | null;
+  imageIngredientsUrl?: string | null;
+  frontImageUrl100?: string | null;
+  frontImageUrl400?: string | null;
+  frontImageUrlFull?: string | null;
+  ingredientsImageUrl100?: string | null;
+  ingredientsImageUrl400?: string | null;
+  ingredientsImageUrlFull?: string | null;
+  source: string;
+  completenessScore: number;
+  dataQualityStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProductLookupResultSource =
+  (typeof ProductLookupResultSource)[keyof typeof ProductLookupResultSource];
+
+export const ProductLookupResultSource = {
+  local: "local",
+  open_beauty_facts_api: "open_beauty_facts_api",
+  not_found: "not_found",
+} as const;
+
+export interface ProductLookupResult {
+  product?: ApiProduct | null;
+  source: ProductLookupResultSource;
+  needsContribution: boolean;
+  missingFields: string[];
+  message: string;
+  analysis?: ProductAnalysisResult | null;
+}
+
+export interface ProductSearchResult {
+  id: string;
+  barcode?: string | null;
+  name?: string | null;
+  brand?: string | null;
+  imageUrl?: string | null;
+  imageFrontUrl?: string | null;
+  categories?: string[] | null;
+  completenessScore: number;
+  dataQualityStatus: string;
+}
+
+export interface ProductSearchResponse {
+  results: ProductSearchResult[];
+  count: number;
+}
+
+export interface CreateContributionInput {
+  barcode?: string;
+  productId?: string;
+  submittedByUserId?: string;
+  proposedName?: string;
+  proposedBrand?: string;
+  proposedCategories?: string[];
+  proposedIngredientsText?: string;
+  proposedImageUrl?: string;
+  proposedImageFrontUrl?: string;
+  proposedImageIngredientsUrl?: string;
+  proposedSourceUrl?: string;
+  notes?: string;
+}
+
+export interface ReviewContributionInput {
+  reviewerId: string;
+  reviewerNotes?: string;
+}
+
+export type ContributionStatus =
+  (typeof ContributionStatus)[keyof typeof ContributionStatus];
+
+export const ContributionStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+  needs_more_info: "needs_more_info",
+} as const;
+
+export interface Contribution {
+  id: string;
+  productId?: string | null;
+  barcode?: string | null;
+  submittedByUserId?: string | null;
+  proposedName?: string | null;
+  proposedBrand?: string | null;
+  proposedCategories?: string[] | null;
+  proposedIngredientsText?: string | null;
+  proposedImageUrl?: string | null;
+  status: ContributionStatus;
+  reviewerId?: string | null;
+  reviewerNotes?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export interface PendingContributionsResponse {
+  contributions: Contribution[];
+  count: number;
+}
+
+export type SearchProductsParams = {
+  q: string;
+  limit?: number;
+};

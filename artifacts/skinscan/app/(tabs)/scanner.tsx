@@ -18,11 +18,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { MOCK_PRODUCTS } from "@/constants/mockData";
-import { lookupByBarcode, searchProducts } from "@/services/openBeautyFacts";
 import {
-  lookupProductByBarcode,
-  saveProductToFirestore,
-} from "@/services/firestoreProducts";
+  lookupProductByBarcodeViaBackend,
+  searchProductsViaBackend,
+} from "@/services/backendProductService";
 
 type ScanMode = "barcode" | "search" | "inci";
 
@@ -49,22 +48,22 @@ export default function ScannerScreen() {
       return;
     }
     const q = query.toLowerCase();
-    const localResults = MOCK_PRODUCTS.filter(
+    const localMockResults = MOCK_PRODUCTS.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.brand.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q)
     );
-    setSearchResults(localResults);
+    setSearchResults(localMockResults);
 
     if (query.trim().length >= 3) {
       setSearchLoading(true);
       try {
-        const obfResults = await searchProducts(query.trim(), 10);
-        const existingIds = new Set(localResults.map((p) => p.id));
-        const newResults = obfResults.filter((p) => !existingIds.has(p.id));
+        const backendResults = await searchProductsViaBackend(query.trim(), 10);
+        const existingIds = new Set(localMockResults.map((p) => p.id));
+        const newResults = backendResults.filter((p) => !existingIds.has(p.id));
         newResults.forEach((p) => addScannedProduct(p));
-        setSearchResults([...localResults, ...newResults]);
+        setSearchResults([...localMockResults, ...newResults]);
       } catch {}
       setSearchLoading(false);
     }
@@ -92,7 +91,7 @@ export default function ScannerScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
-      // 1. Mock data
+      // 1. Mock data (instant — for demo/offline)
       const mockMatch = MOCK_PRODUCTS.find((p) => p.barcode === data || p.id === data);
       if (mockMatch) {
         addToHistory(mockMatch.id);
@@ -100,29 +99,18 @@ export default function ScannerScreen() {
         return;
       }
 
-      // 2. Firestore (imported OBF database)
-      setScanStatus("Recherche dans la base de données…");
-      const firestoreProduct = await lookupProductByBarcode(data);
-      if (firestoreProduct) {
-        addScannedProduct(firestoreProduct);
-        addToHistory(firestoreProduct.id);
-        router.push(`/product/${firestoreProduct.id}`);
+      // 2. Backend API (local DB → Open Beauty Facts fallback)
+      setScanStatus("Recherche du produit…");
+      const { product: backendProduct, message } = await lookupProductByBarcodeViaBackend(data);
+      if (backendProduct) {
+        addScannedProduct(backendProduct);
+        addToHistory(backendProduct.id);
+        router.push(`/product/${backendProduct.id}`);
         return;
       }
 
-      // 3. Open Beauty Facts live API
-      setScanStatus("Recherche sur Open Beauty Facts…");
-      const obfProduct = await lookupByBarcode(data);
-      if (obfProduct) {
-        // Save to Firestore for faster future lookups
-        saveProductToFirestore(obfProduct);
-        addScannedProduct(obfProduct);
-        addToHistory(obfProduct.id);
-        router.push(`/product/${obfProduct.id}`);
-        return;
-      }
-
-      // 4. Not found
+      // 3. Not found — offer contribution
+      setScanStatus(message);
       router.push("/add-product");
     } finally {
       setScanLoading(false);

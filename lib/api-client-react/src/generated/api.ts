@@ -3,20 +3,32 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  Contribution,
+  CreateContributionInput,
+  HealthStatus,
+  PendingContributionsResponse,
+  ProductLookupResult,
+  ProductSearchResponse,
+  ReviewContributionInput,
+  SearchProductsParams,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +111,529 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Checks local DB first, falls back to Open Beauty Facts API
+ * @summary Lookup product by barcode
+ */
+export const getLookupProductByBarcodeUrl = (barcode: string) => {
+  return `/api/products/barcode/${barcode}`;
+};
+
+export const lookupProductByBarcode = async (
+  barcode: string,
+  options?: RequestInit,
+): Promise<ProductLookupResult> => {
+  return customFetch<ProductLookupResult>(
+    getLookupProductByBarcodeUrl(barcode),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getLookupProductByBarcodeQueryKey = (barcode: string) => {
+  return [`/api/products/barcode/${barcode}`] as const;
+};
+
+export const getLookupProductByBarcodeQueryOptions = <
+  TData = Awaited<ReturnType<typeof lookupProductByBarcode>>,
+  TError = ErrorType<ProductLookupResult>,
+>(
+  barcode: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProductByBarcode>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getLookupProductByBarcodeQueryKey(barcode);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof lookupProductByBarcode>>
+  > = ({ signal }) =>
+    lookupProductByBarcode(barcode, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!barcode,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof lookupProductByBarcode>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type LookupProductByBarcodeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof lookupProductByBarcode>>
+>;
+export type LookupProductByBarcodeQueryError = ErrorType<ProductLookupResult>;
+
+/**
+ * @summary Lookup product by barcode
+ */
+
+export function useLookupProductByBarcode<
+  TData = Awaited<ReturnType<typeof lookupProductByBarcode>>,
+  TError = ErrorType<ProductLookupResult>,
+>(
+  barcode: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProductByBarcode>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getLookupProductByBarcodeQueryOptions(barcode, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Search products
+ */
+export const getSearchProductsUrl = (params: SearchProductsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/products/search?${stringifiedParams}`
+    : `/api/products/search`;
+};
+
+export const searchProducts = async (
+  params: SearchProductsParams,
+  options?: RequestInit,
+): Promise<ProductSearchResponse> => {
+  return customFetch<ProductSearchResponse>(getSearchProductsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchProductsQueryKey = (params?: SearchProductsParams) => {
+  return [`/api/products/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchProductsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchProducts>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchProductsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchProducts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchProductsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchProducts>>> = ({
+    signal,
+  }) => searchProducts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchProducts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchProductsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchProducts>>
+>;
+export type SearchProductsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search products
+ */
+
+export function useSearchProducts<
+  TData = Awaited<ReturnType<typeof searchProducts>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchProductsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchProducts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchProductsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Submit a product contribution
+ */
+export const getCreateContributionUrl = () => {
+  return `/api/products/contributions`;
+};
+
+export const createContribution = async (
+  createContributionInput: CreateContributionInput,
+  options?: RequestInit,
+): Promise<Contribution> => {
+  return customFetch<Contribution>(getCreateContributionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createContributionInput),
+  });
+};
+
+export const getCreateContributionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createContribution>>,
+    TError,
+    { data: BodyType<CreateContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createContribution>>,
+  TError,
+  { data: BodyType<CreateContributionInput> },
+  TContext
+> => {
+  const mutationKey = ["createContribution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createContribution>>,
+    { data: BodyType<CreateContributionInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createContribution(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateContributionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createContribution>>
+>;
+export type CreateContributionMutationBody = BodyType<CreateContributionInput>;
+export type CreateContributionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit a product contribution
+ */
+export const useCreateContribution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createContribution>>,
+    TError,
+    { data: BodyType<CreateContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createContribution>>,
+  TError,
+  { data: BodyType<CreateContributionInput> },
+  TContext
+> => {
+  return useMutation(getCreateContributionMutationOptions(options));
+};
+
+/**
+ * @summary List pending contributions (admin)
+ */
+export const getGetPendingContributionsUrl = () => {
+  return `/api/products/contributions/pending`;
+};
+
+export const getPendingContributions = async (
+  options?: RequestInit,
+): Promise<PendingContributionsResponse> => {
+  return customFetch<PendingContributionsResponse>(
+    getGetPendingContributionsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPendingContributionsQueryKey = () => {
+  return [`/api/products/contributions/pending`] as const;
+};
+
+export const getGetPendingContributionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPendingContributions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPendingContributions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPendingContributionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPendingContributions>>
+  > = ({ signal }) => getPendingContributions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPendingContributions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPendingContributionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPendingContributions>>
+>;
+export type GetPendingContributionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List pending contributions (admin)
+ */
+
+export function useGetPendingContributions<
+  TData = Awaited<ReturnType<typeof getPendingContributions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPendingContributions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPendingContributionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve a contribution (admin)
+ */
+export const getApproveContributionUrl = (id: string) => {
+  return `/api/products/contributions/${id}/approve`;
+};
+
+export const approveContribution = async (
+  id: string,
+  reviewContributionInput: ReviewContributionInput,
+  options?: RequestInit,
+): Promise<Contribution> => {
+  return customFetch<Contribution>(getApproveContributionUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reviewContributionInput),
+  });
+};
+
+export const getApproveContributionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveContribution>>,
+    TError,
+    { id: string; data: BodyType<ReviewContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveContribution>>,
+  TError,
+  { id: string; data: BodyType<ReviewContributionInput> },
+  TContext
+> => {
+  const mutationKey = ["approveContribution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveContribution>>,
+    { id: string; data: BodyType<ReviewContributionInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return approveContribution(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveContributionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveContribution>>
+>;
+export type ApproveContributionMutationBody = BodyType<ReviewContributionInput>;
+export type ApproveContributionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve a contribution (admin)
+ */
+export const useApproveContribution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveContribution>>,
+    TError,
+    { id: string; data: BodyType<ReviewContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveContribution>>,
+  TError,
+  { id: string; data: BodyType<ReviewContributionInput> },
+  TContext
+> => {
+  return useMutation(getApproveContributionMutationOptions(options));
+};
+
+/**
+ * @summary Reject a contribution (admin)
+ */
+export const getRejectContributionUrl = (id: string) => {
+  return `/api/products/contributions/${id}/reject`;
+};
+
+export const rejectContribution = async (
+  id: string,
+  reviewContributionInput: ReviewContributionInput,
+  options?: RequestInit,
+): Promise<Contribution> => {
+  return customFetch<Contribution>(getRejectContributionUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reviewContributionInput),
+  });
+};
+
+export const getRejectContributionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectContribution>>,
+    TError,
+    { id: string; data: BodyType<ReviewContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectContribution>>,
+  TError,
+  { id: string; data: BodyType<ReviewContributionInput> },
+  TContext
+> => {
+  const mutationKey = ["rejectContribution"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectContribution>>,
+    { id: string; data: BodyType<ReviewContributionInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return rejectContribution(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectContributionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rejectContribution>>
+>;
+export type RejectContributionMutationBody = BodyType<ReviewContributionInput>;
+export type RejectContributionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reject a contribution (admin)
+ */
+export const useRejectContribution = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectContribution>>,
+    TError,
+    { id: string; data: BodyType<ReviewContributionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectContribution>>,
+  TError,
+  { id: string; data: BodyType<ReviewContributionInput> },
+  TContext
+> => {
+  return useMutation(getRejectContributionMutationOptions(options));
+};

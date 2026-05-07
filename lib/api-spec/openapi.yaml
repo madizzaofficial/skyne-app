@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
+  version: 0.2.0
   description: API specification
 servers:
   - url: /api
@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: products
+    description: Product lookup, search, and contributions
 paths:
   /healthz:
     get:
@@ -24,6 +26,140 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /products/barcode/{barcode}:
+    get:
+      operationId: lookupProductByBarcode
+      tags: [products]
+      summary: Lookup product by barcode
+      description: Checks local DB first, falls back to Open Beauty Facts API
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLookupResult"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductLookupResult"
+
+  /products/search:
+    get:
+      operationId: searchProducts
+      tags: [products]
+      summary: Search products
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 12
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductSearchResponse"
+
+  /products/contributions:
+    post:
+      operationId: createContribution
+      tags: [products]
+      summary: Submit a product contribution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateContributionInput"
+      responses:
+        "201":
+          description: Contribution created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+
+  /products/contributions/pending:
+    get:
+      operationId: getPendingContributions
+      tags: [products]
+      summary: List pending contributions (admin)
+      responses:
+        "200":
+          description: Pending contributions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingContributionsResponse"
+
+  /products/contributions/{id}/approve:
+    post:
+      operationId: approveContribution
+      tags: [products]
+      summary: Approve a contribution (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewContributionInput"
+      responses:
+        "200":
+          description: Contribution approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+
+  /products/contributions/{id}/reject:
+    post:
+      operationId: rejectContribution
+      tags: [products]
+      summary: Reject a contribution (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewContributionInput"
+      responses:
+        "200":
+          description: Contribution rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contribution"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +170,337 @@ components:
       required:
         - status
 
+    AnalyzedIngredient:
+      type: object
+      properties:
+        inci:
+          type: string
+        commonName:
+          type: string
+        function:
+          type: string
+        safetyLevel:
+          type: string
+          enum: [safe, caution, avoid]
+        isAllergen:
+          type: boolean
+        benefits:
+          type: array
+          items:
+            type: string
+        concerns:
+          type: array
+          items:
+            type: string
+      required: [inci, commonName, function, safetyLevel, isAllergen, benefits, concerns]
+
+    ProductAnalysisResult:
+      type: object
+      properties:
+        summary:
+          type: string
+        detectedIngredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyzedIngredient"
+        warnings:
+          type: array
+          items:
+            type: string
+        positivePoints:
+          type: array
+          items:
+            type: string
+        acneSafetyNotes:
+          type: array
+          items:
+            type: string
+        sensitiveSkinNotes:
+          type: array
+          items:
+            type: string
+        fragranceAlcoholNotes:
+          type: array
+          items:
+            type: string
+        comedogenicRiskLevel:
+          type: string
+          enum: [low, medium, high, unknown]
+        irritationRiskLevel:
+          type: string
+          enum: [low, medium, high, unknown]
+        confidenceScore:
+          type: number
+      required:
+        - summary
+        - detectedIngredients
+        - warnings
+        - positivePoints
+        - acneSafetyNotes
+        - sensitiveSkinNotes
+        - fragranceAlcoholNotes
+        - comedogenicRiskLevel
+        - irritationRiskLevel
+        - confidenceScore
+
+    ApiProduct:
+      type: object
+      properties:
+        id:
+          type: string
+        barcode:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        brands:
+          type: array
+          items:
+            type: string
+          nullable: true
+        categories:
+          type: array
+          items:
+            type: string
+          nullable: true
+        countries:
+          type: array
+          items:
+            type: string
+          nullable: true
+        ingredientsText:
+          type: string
+          nullable: true
+        ingredientsTags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        allergensTags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        labelsTags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        imageFrontUrl:
+          type: string
+          nullable: true
+        imageIngredientsUrl:
+          type: string
+          nullable: true
+        frontImageUrl100:
+          type: string
+          nullable: true
+        frontImageUrl400:
+          type: string
+          nullable: true
+        frontImageUrlFull:
+          type: string
+          nullable: true
+        ingredientsImageUrl100:
+          type: string
+          nullable: true
+        ingredientsImageUrl400:
+          type: string
+          nullable: true
+        ingredientsImageUrlFull:
+          type: string
+          nullable: true
+        source:
+          type: string
+        completenessScore:
+          type: integer
+        dataQualityStatus:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - source
+        - completenessScore
+        - dataQualityStatus
+        - createdAt
+        - updatedAt
+
+    ProductLookupResult:
+      type: object
+      properties:
+        product:
+          allOf:
+            - $ref: "#/components/schemas/ApiProduct"
+          nullable: true
+        source:
+          type: string
+          enum: [local, open_beauty_facts_api, not_found]
+        needsContribution:
+          type: boolean
+        missingFields:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+        analysis:
+          allOf:
+            - $ref: "#/components/schemas/ProductAnalysisResult"
+          nullable: true
+      required:
+        - source
+        - needsContribution
+        - missingFields
+        - message
+
+    ProductSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        barcode:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        brand:
+          type: string
+          nullable: true
+        imageUrl:
+          type: string
+          nullable: true
+        imageFrontUrl:
+          type: string
+          nullable: true
+        categories:
+          type: array
+          items:
+            type: string
+          nullable: true
+        completenessScore:
+          type: integer
+        dataQualityStatus:
+          type: string
+      required:
+        - id
+        - completenessScore
+        - dataQualityStatus
+
+    ProductSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductSearchResult"
+        count:
+          type: integer
+      required: [results, count]
+
+    CreateContributionInput:
+      type: object
+      properties:
+        barcode:
+          type: string
+        productId:
+          type: string
+        submittedByUserId:
+          type: string
+        proposedName:
+          type: string
+        proposedBrand:
+          type: string
+        proposedCategories:
+          type: array
+          items:
+            type: string
+        proposedIngredientsText:
+          type: string
+        proposedImageUrl:
+          type: string
+        proposedImageFrontUrl:
+          type: string
+        proposedImageIngredientsUrl:
+          type: string
+        proposedSourceUrl:
+          type: string
+        notes:
+          type: string
+
+    ReviewContributionInput:
+      type: object
+      properties:
+        reviewerId:
+          type: string
+        reviewerNotes:
+          type: string
+      required: [reviewerId]
+
+    Contribution:
+      type: object
+      properties:
+        id:
+          type: string
+        productId:
+          type: string
+          nullable: true
+        barcode:
+          type: string
+          nullable: true
+        submittedByUserId:
+          type: string
+          nullable: true
+        proposedName:
+          type: string
+          nullable: true
+        proposedBrand:
+          type: string
+          nullable: true
+        proposedCategories:
+          type: array
+          items:
+            type: string
+          nullable: true
+        proposedIngredientsText:
+          type: string
+          nullable: true
+        proposedImageUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, approved, rejected, needs_more_info]
+        reviewerId:
+          type: string
+          nullable: true
+        reviewerNotes:
+          type: string
+          nullable: true
+        reviewedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required: [id, status, createdAt]
+
+    PendingContributionsResponse:
+      type: object
+      properties:
+        contributions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Contribution"
+        count:
+          type: integer
+      required: [contributions, count]

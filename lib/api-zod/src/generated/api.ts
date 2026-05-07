@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * API specification
- * OpenAPI spec version: 0.1.0
+ * OpenAPI spec version: 0.2.0
  */
 import * as zod from "zod";
 
@@ -13,4 +13,200 @@ import * as zod from "zod";
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+});
+
+/**
+ * Checks local DB first, falls back to Open Beauty Facts API
+ * @summary Lookup product by barcode
+ */
+export const LookupProductByBarcodeParams = zod.object({
+  barcode: zod.coerce.string(),
+});
+
+export const LookupProductByBarcodeResponse = zod.object({
+  product: zod
+    .object({
+      id: zod.string(),
+      barcode: zod.string().nullish(),
+      name: zod.string().nullish(),
+      brand: zod.string().nullish(),
+      brands: zod.array(zod.string()).nullish(),
+      categories: zod.array(zod.string()).nullish(),
+      countries: zod.array(zod.string()).nullish(),
+      ingredientsText: zod.string().nullish(),
+      ingredientsTags: zod.array(zod.string()).nullish(),
+      allergensTags: zod.array(zod.string()).nullish(),
+      labelsTags: zod.array(zod.string()).nullish(),
+      imageUrl: zod.string().nullish(),
+      imageFrontUrl: zod.string().nullish(),
+      imageIngredientsUrl: zod.string().nullish(),
+      frontImageUrl100: zod.string().nullish(),
+      frontImageUrl400: zod.string().nullish(),
+      frontImageUrlFull: zod.string().nullish(),
+      ingredientsImageUrl100: zod.string().nullish(),
+      ingredientsImageUrl400: zod.string().nullish(),
+      ingredientsImageUrlFull: zod.string().nullish(),
+      source: zod.string(),
+      completenessScore: zod.number(),
+      dataQualityStatus: zod.string(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    })
+    .nullish(),
+  source: zod.enum(["local", "open_beauty_facts_api", "not_found"]),
+  needsContribution: zod.boolean(),
+  missingFields: zod.array(zod.string()),
+  message: zod.string(),
+  analysis: zod
+    .object({
+      summary: zod.string(),
+      detectedIngredients: zod.array(
+        zod.object({
+          inci: zod.string(),
+          commonName: zod.string(),
+          function: zod.string(),
+          safetyLevel: zod.enum(["safe", "caution", "avoid"]),
+          isAllergen: zod.boolean(),
+          benefits: zod.array(zod.string()),
+          concerns: zod.array(zod.string()),
+        }),
+      ),
+      warnings: zod.array(zod.string()),
+      positivePoints: zod.array(zod.string()),
+      acneSafetyNotes: zod.array(zod.string()),
+      sensitiveSkinNotes: zod.array(zod.string()),
+      fragranceAlcoholNotes: zod.array(zod.string()),
+      comedogenicRiskLevel: zod.enum(["low", "medium", "high", "unknown"]),
+      irritationRiskLevel: zod.enum(["low", "medium", "high", "unknown"]),
+      confidenceScore: zod.number(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Search products
+ */
+export const searchProductsQueryLimitDefault = 12;
+
+export const SearchProductsQueryParams = zod.object({
+  q: zod.coerce.string(),
+  limit: zod.coerce.number().default(searchProductsQueryLimitDefault),
+});
+
+export const SearchProductsResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      id: zod.string(),
+      barcode: zod.string().nullish(),
+      name: zod.string().nullish(),
+      brand: zod.string().nullish(),
+      imageUrl: zod.string().nullish(),
+      imageFrontUrl: zod.string().nullish(),
+      categories: zod.array(zod.string()).nullish(),
+      completenessScore: zod.number(),
+      dataQualityStatus: zod.string(),
+    }),
+  ),
+  count: zod.number(),
+});
+
+/**
+ * @summary Submit a product contribution
+ */
+export const CreateContributionBody = zod.object({
+  barcode: zod.string().optional(),
+  productId: zod.string().optional(),
+  submittedByUserId: zod.string().optional(),
+  proposedName: zod.string().optional(),
+  proposedBrand: zod.string().optional(),
+  proposedCategories: zod.array(zod.string()).optional(),
+  proposedIngredientsText: zod.string().optional(),
+  proposedImageUrl: zod.string().optional(),
+  proposedImageFrontUrl: zod.string().optional(),
+  proposedImageIngredientsUrl: zod.string().optional(),
+  proposedSourceUrl: zod.string().optional(),
+  notes: zod.string().optional(),
+});
+
+/**
+ * @summary List pending contributions (admin)
+ */
+export const GetPendingContributionsResponse = zod.object({
+  contributions: zod.array(
+    zod.object({
+      id: zod.string(),
+      productId: zod.string().nullish(),
+      barcode: zod.string().nullish(),
+      submittedByUserId: zod.string().nullish(),
+      proposedName: zod.string().nullish(),
+      proposedBrand: zod.string().nullish(),
+      proposedCategories: zod.array(zod.string()).nullish(),
+      proposedIngredientsText: zod.string().nullish(),
+      proposedImageUrl: zod.string().nullish(),
+      status: zod.enum(["pending", "approved", "rejected", "needs_more_info"]),
+      reviewerId: zod.string().nullish(),
+      reviewerNotes: zod.string().nullish(),
+      reviewedAt: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  count: zod.number(),
+});
+
+/**
+ * @summary Approve a contribution (admin)
+ */
+export const ApproveContributionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ApproveContributionBody = zod.object({
+  reviewerId: zod.string(),
+  reviewerNotes: zod.string().optional(),
+});
+
+export const ApproveContributionResponse = zod.object({
+  id: zod.string(),
+  productId: zod.string().nullish(),
+  barcode: zod.string().nullish(),
+  submittedByUserId: zod.string().nullish(),
+  proposedName: zod.string().nullish(),
+  proposedBrand: zod.string().nullish(),
+  proposedCategories: zod.array(zod.string()).nullish(),
+  proposedIngredientsText: zod.string().nullish(),
+  proposedImageUrl: zod.string().nullish(),
+  status: zod.enum(["pending", "approved", "rejected", "needs_more_info"]),
+  reviewerId: zod.string().nullish(),
+  reviewerNotes: zod.string().nullish(),
+  reviewedAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Reject a contribution (admin)
+ */
+export const RejectContributionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const RejectContributionBody = zod.object({
+  reviewerId: zod.string(),
+  reviewerNotes: zod.string().optional(),
+});
+
+export const RejectContributionResponse = zod.object({
+  id: zod.string(),
+  productId: zod.string().nullish(),
+  barcode: zod.string().nullish(),
+  submittedByUserId: zod.string().nullish(),
+  proposedName: zod.string().nullish(),
+  proposedBrand: zod.string().nullish(),
+  proposedCategories: zod.array(zod.string()).nullish(),
+  proposedIngredientsText: zod.string().nullish(),
+  proposedImageUrl: zod.string().nullish(),
+  status: zod.enum(["pending", "approved", "rejected", "needs_more_info"]),
+  reviewerId: zod.string().nullish(),
+  reviewerNotes: zod.string().nullish(),
+  reviewedAt: zod.string().nullish(),
+  createdAt: zod.string(),
 });

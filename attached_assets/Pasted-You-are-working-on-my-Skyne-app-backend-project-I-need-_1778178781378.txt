@@ -1,0 +1,620 @@
+You are working on my Skyne app/backend project.
+
+I need you to think critically before coding.
+
+Context:
+Skyne is a skincare/cosmetic product analysis app. Users can scan a barcode, search a product, share a product page, view product details, analyze ingredients, and contribute missing product information.
+
+We are considering how to use Open Beauty Facts data.
+
+Possible strategies:
+1. Import the full Open Beauty Facts database from JSONL.
+2. Use Open Beauty Facts API directly during scan/search.
+3. Use a hybrid strategy:
+   - local database first
+   - Open Beauty Facts API fallback
+   - save fetched products locally
+   - allow user contributions when data is missing
+   - review contributions before updating official product data
+   - optional targeted JSONL import later for popular/curated products
+
+Important:
+Do NOT blindly implement the first idea.
+First analyze the best technical and product decision for MVP.
+
+==================================================
+PHASE 1 — THINK FIRST, THEN DECIDE
+==================================================
+
+Before writing code, inspect the project and produce a short technical decision note.
+
+Compare these options:
+
+A. Full JSONL import
+B. API-only lookup
+C. Hybrid lookup + local cache + contributions
+D. Targeted JSONL import later
+
+Evaluate each option based on:
+- MVP speed
+- reliability
+- cost
+- scalability
+- user experience
+- image availability
+- offline mode usefulness
+- data freshness
+- database complexity
+- maintenance burden
+- risk of incomplete/dirty product data
+- dependency on Open Beauty Facts availability
+- future ability to build our own enriched product database
+
+Then recommend the best architecture for the current MVP.
+
+My expectation:
+The likely best strategy is NOT full import for MVP.
+The likely best strategy is:
+- use our backend as the single product gateway
+- check local PostgreSQL first
+- if product is missing or incomplete, call Open Beauty Facts API
+- normalize and save the product locally
+- store image URLs and image metadata
+- cache ingredient analysis
+- allow user contribution for missing information
+- require review before updating official product data
+- keep JSONL import as a later optional targeted enrichment tool, not the default MVP path
+
+But challenge this assumption. If you disagree, explain why.
+
+Do not code until you have made this decision note.
+
+==================================================
+PHASE 2 — TARGET ARCHITECTURE
+==================================================
+
+Implement the chosen MVP architecture cleanly.
+
+Core idea:
+The mobile app should never depend directly on Open Beauty Facts.
+The app should call our own backend.
+The backend decides:
+- local DB result
+- Open Beauty Facts API fallback
+- contribution flow
+- analysis cache
+
+Architecture:
+
+Mobile App
+→ Skyne Backend
+→ ProductLookupService
+   → Local PostgreSQL products table
+   → Open Beauty Facts API fallback if needed
+   → Product normalization
+   → Product completeness scoring
+   → Ingredient analysis cache
+   → User contribution flow
+
+Firebase can remain for:
+- authentication
+- user data
+- saved products
+- scan history
+- routines
+- notifications
+
+PostgreSQL should store:
+- products fetched from API
+- products scanned/searched by users
+- manually curated products
+- user contribution review data
+- cached analysis results
+
+Do not use Firestore as the main product catalogue database.
+
+==================================================
+PHASE 3 — DATABASE MODEL
+==================================================
+
+Create or update the database schema.
+
+If the project uses Prisma, update Prisma schema and migrations.
+If it does not use Prisma, use SQL migrations with node-postgres.
+
+Create/update these tables:
+
+products:
+- id UUID primary key
+- barcode TEXT unique nullable
+- name TEXT nullable
+- brand TEXT nullable
+- brands TEXT[] nullable
+- categories TEXT[] nullable
+- countries TEXT[] nullable
+- ingredients_text TEXT nullable
+- ingredients_tags TEXT[] nullable
+- allergens_tags TEXT[] nullable
+- labels_tags TEXT[] nullable
+- stores TEXT[] nullable
+- image_url TEXT nullable
+- image_front_url TEXT nullable
+- image_ingredients_url TEXT nullable
+- images_raw JSONB nullable
+- front_image_url_100 TEXT nullable
+- front_image_url_400 TEXT nullable
+- front_image_url_full TEXT nullable
+- ingredients_image_url_100 TEXT nullable
+- ingredients_image_url_400 TEXT nullable
+- ingredients_image_url_full TEXT nullable
+- source TEXT default "unknown"
+- source_url TEXT nullable
+- raw JSONB nullable
+- completeness_score INT default 0
+- data_quality_status TEXT default "incomplete"
+  allowed values:
+  - "incomplete"
+  - "usable"
+  - "verified"
+  - "rejected"
+- last_fetched_from_api_at TIMESTAMP nullable
+- source_updated_at TIMESTAMP nullable
+- analysis_cached_at TIMESTAMP nullable
+- created_at TIMESTAMP
+- updated_at TIMESTAMP
+
+product_contributions:
+- id UUID primary key
+- product_id UUID nullable
+- barcode TEXT nullable
+- submitted_by_user_id TEXT nullable
+- proposed_name TEXT nullable
+- proposed_brand TEXT nullable
+- proposed_categories TEXT[] nullable
+- proposed_ingredients_text TEXT nullable
+- proposed_image_url TEXT nullable
+- proposed_image_front_url TEXT nullable
+- proposed_image_ingredients_url TEXT nullable
+- proposed_source_url TEXT nullable
+- notes TEXT nullable
+- status TEXT default "pending"
+  allowed values:
+  - "pending"
+  - "approved"
+  - "rejected"
+  - "needs_more_info"
+- reviewer_id TEXT nullable
+- reviewer_notes TEXT nullable
+- reviewed_at TIMESTAMP nullable
+- created_at TIMESTAMP
+- updated_at TIMESTAMP
+
+product_analysis_cache:
+- id UUID primary key
+- product_id UUID
+- ingredients_hash TEXT
+- analysis JSONB
+- created_at TIMESTAMP
+- updated_at TIMESTAMP
+
+Recommended indexes:
+- products.barcode unique
+- lower(products.name)
+- lower(products.brand)
+- GIN index on products.ingredients_tags
+- GIN index on products.categories
+- product_contributions.status
+- product_analysis_cache.product_id
+- product_analysis_cache.ingredients_hash
+
+==================================================
+PHASE 4 — SERVICES TO CREATE OR UPDATE
+==================================================
+
+Create/update:
+
+src/services/products/productLookupService.ts
+src/services/products/productRepository.ts
+src/services/products/productCompletenessService.ts
+src/services/products/productImportMapper.ts
+src/services/products/productAnalysisService.ts
+src/services/products/productContributionService.ts
+src/services/products/productImageUtils.ts
+src/services/products/productAnalysisCacheService.ts
+src/services/openBeautyFacts/openBeautyFactsApiClient.ts
+
+Also create/update types:
+
+src/types/product.ts
+src/types/openBeautyFacts.ts
+src/types/productContribution.ts
+
+==================================================
+PHASE 5 — PRODUCT LOOKUP LOGIC
+==================================================
+
+Implement:
+
+lookupProductByBarcode(barcode: string): Promise<ProductLookupResult>
+
+Behavior:
+1. Clean and validate barcode.
+2. Search local PostgreSQL by barcode.
+3. If product exists and completeness_score >= 70:
+   - return local product.
+4. If product exists but is incomplete:
+   - call Open Beauty Facts API to try to enrich it.
+5. If product is missing:
+   - call Open Beauty Facts API.
+6. If API returns a product:
+   - normalize it.
+   - merge safely with local product if it exists.
+   - save/update local DB.
+   - recompute completeness_score.
+   - run or fetch cached analysis if ingredients exist.
+   - return product.
+7. If API does not find product:
+   - return not found result with needsContribution = true.
+8. Never call the Open Beauty Facts API directly from the mobile client.
+
+Implement result shape:
+
+ProductLookupResult:
+- product: Product | null
+- source: "local" | "open_beauty_facts_api" | "not_found"
+- needsContribution: boolean
+- missingFields: string[]
+- message: string
+- analysis?: ProductAnalysisResult
+
+==================================================
+PHASE 6 — SEARCH LOGIC
+==================================================
+
+Implement:
+
+searchProducts(query: string): Promise<ProductSearchResult[]>
+
+Behavior:
+1. Search local DB first.
+2. If query length < 3, do not call external API.
+3. If local results are enough, return them.
+4. If local results are weak or empty, call Open Beauty Facts search API.
+5. Normalize useful API results.
+6. Save them locally.
+7. Return merged deduplicated results.
+8. Do not call API on every keystroke; frontend must debounce.
+9. Backend should be safe against spam.
+
+==================================================
+PHASE 7 — OPEN BEAUTY FACTS API CLIENT
+==================================================
+
+Create an API client with:
+- custom User-Agent identifying Skyne
+- timeout
+- safe retry for 503 only
+- graceful handling of:
+  - 404 not found
+  - 429 rate limit
+  - 503 unavailable
+- no bulk API loops
+- no full database import
+
+Functions:
+- getProductByBarcode(barcode: string)
+- searchProducts(query: string, options?)
+
+Important:
+Use the same mapper as JSONL/import logic so API and future import share normalization.
+
+==================================================
+PHASE 8 — PRODUCT COMPLETENESS SCORE
+==================================================
+
+Create productCompletenessService.ts
+
+Implement:
+
+calculateCompletenessScore(product): number
+
+Suggested score:
+- barcode present: +10
+- name present: +15
+- brand present: +15
+- ingredients_text present and length > 30: +30
+- image_front_url or image_url present: +15
+- image_ingredients_url present: +10
+- categories present: +5
+
+Max score: 100.
+
+Implement:
+
+getMissingProductFields(product): string[]
+
+Possible missing fields:
+- name
+- brand
+- ingredients_text
+- front_image
+- ingredients_image
+- categories
+
+Status rules:
+- score < 70 → incomplete
+- score >= 70 → usable
+- manually approved/admin curated → verified
+
+==================================================
+PHASE 9 — SAFE MERGE RULES
+==================================================
+
+When merging API data into an existing local product:
+
+Do:
+- keep verified local data over external API data
+- fill missing fields from API
+- update stale external fields if local data is not verified
+- keep raw API JSON
+- recompute completeness_score
+
+Do NOT:
+- overwrite verified fields
+- replace non-empty ingredients with empty/null
+- replace existing images with null
+- overwrite user/admin reviewed data blindly
+
+==================================================
+PHASE 10 — IMAGE HANDLING
+==================================================
+
+Images are very important for Skyne.
+
+Do not ignore them.
+
+Open Beauty Facts often returns images in:
+- image_url
+- image_front_url
+- image_ingredients_url
+- images.front_fr
+- images.front_en
+- images.ingredients_fr
+- images.ingredients_en
+- numeric images like images["1"], images["2"]
+
+Create productImageUtils.ts
+
+Functions:
+- cleanBarcode(barcode: string): string | null
+- buildOpenFactsImagePath(barcode: string): string | null
+- buildOpenFactsImageBaseUrl(barcode: string): string | null
+- buildSelectedImageUrl(barcode, imageKey, rev, size): string | null
+- buildRawImageUrl(barcode, imgid, size): string | null
+- extractBestImageUrls(rawProduct): ProductImageUrls
+
+Image detection priority:
+
+Front image:
+1. rawProduct.image_front_url
+2. rawProduct.image_url
+3. rawProduct.images.front_fr
+4. rawProduct.images.front_en
+5. first key starting with "front_"
+6. rawProduct.images["1"]
+7. first numeric image key
+
+Ingredients image:
+1. rawProduct.image_ingredients_url
+2. rawProduct.images.ingredients_fr
+3. rawProduct.images.ingredients_en
+4. first key starting with "ingredients_"
+
+URL format examples:
+
+Barcode:
+3700026995515
+
+Path:
+370/002/699/5515
+
+Selected image:
+https://images.openfoodfacts.org/images/products/370/002/699/5515/front_fr.7.400.jpg
+
+Ingredients image:
+https://images.openfoodfacts.org/images/products/370/002/699/5515/ingredients_fr.10.400.jpg
+
+Raw image:
+https://images.openfoodfacts.org/images/products/370/002/699/5515/3.400.jpg
+
+Do not download all images.
+Do not store image binaries in PostgreSQL.
+Store image URLs and raw image metadata.
+Later we can add Cloudflare R2/S3/Firebase Storage caching for popular products only.
+
+==================================================
+PHASE 11 — INGREDIENT ANALYSIS + CACHE
+==================================================
+
+If ingredients_text exists:
+- analyze ingredients using productAnalysisService
+- cache result in product_analysis_cache using product_id + ingredients_hash
+- if ingredients_text changes, generate a new hash and new analysis
+
+ProductAnalysisResult should include:
+- summary
+- detectedIngredients
+- warnings
+- positivePoints
+- acneSafetyNotes
+- sensitiveSkinNotes
+- fragranceAlcoholNotes
+- comedogenicRiskLevel: "low" | "medium" | "high" | "unknown"
+- irritationRiskLevel: "low" | "medium" | "high" | "unknown"
+- confidenceScore
+
+For now, rule-based analysis is enough:
+Detect:
+- parfum/fragrance
+- alcohol denat / ethanol / isopropyl alcohol
+- essential oils
+- limonene
+- linalool
+- citronellol
+- geraniol
+- eugenol
+- citral
+- benzyl alcohol
+- benzyl salicylate
+- niacinamide
+- panthenol
+- glycerin
+- ceramides
+- centella asiatica
+- allantoin
+
+Do not make medical claims.
+
+==================================================
+PHASE 12 — USER CONTRIBUTION + REVIEW
+==================================================
+
+Implement productContributionService.ts
+
+Functions:
+- createProductContribution(input)
+- getPendingContributions()
+- approveContribution(contributionId, reviewerId, reviewerNotes?)
+- rejectContribution(contributionId, reviewerId, reviewerNotes?)
+- requestMoreInfo(contributionId, reviewerId, reviewerNotes?)
+
+Contribution flow:
+- if product is missing or incomplete, user can submit missing data
+- contribution status starts as pending
+- contribution does not modify official product immediately
+- admin/reviewer must approve
+- approved contribution updates missing product fields
+- recompute completeness_score
+- update data_quality_status
+- keep audit trail
+
+If no admin UI exists yet:
+- create backend/service layer first
+- add a simple internal endpoint or script to list pending and approve/reject contributions
+- do not overbuild a full admin dashboard unless project already has one
+
+==================================================
+PHASE 13 — FRONTEND UX IF APPLICABLE
+==================================================
+
+If this project includes the mobile frontend, add/update:
+
+- ProductScanResultScreen
+- ProductDetailScreen
+- ProductMissingInfoCard
+- ProductContributionForm
+- ManualIngredientsInput
+
+UX rules:
+
+If product is found and usable:
+- show product details
+- show image
+- show ingredients
+- show analysis
+
+If product is found but incomplete:
+- show product details
+- show missing info card:
+  "Ce produit est incomplet."
+  "Il manque : ingrédients / image / marque / catégorie."
+- show button:
+  "Compléter ce produit"
+
+If product is not found:
+- show:
+  "Produit introuvable."
+- offer:
+  - search by name
+  - paste ingredients manually
+  - add product for review
+
+Manual fallback:
+- product name optional
+- brand optional
+- ingredients text required
+- analyze ingredients locally/backend
+- allow submission for review
+
+==================================================
+PHASE 14 — FUTURE JSONL IMPORT PREPARATION ONLY
+==================================================
+
+Do not implement full JSONL import now unless it already exists and is necessary.
+
+But keep the code designed so future targeted import is possible.
+
+Future targeted import should allow:
+- import only products with ingredients
+- import only products with images
+- import by country
+- import by brand list
+- import by categories
+- import recently updated products
+- import popular/curated products
+
+Add TODO notes where appropriate.
+
+==================================================
+PHASE 15 — TESTING
+==================================================
+
+Add tests or simple scripts for:
+
+1. Lookup barcode found locally.
+2. Lookup barcode missing locally but found via Open Beauty Facts API.
+3. Lookup barcode missing everywhere.
+4. Product incomplete after API fetch.
+5. Product image URLs extracted from Open Beauty Facts metadata.
+6. User contribution created.
+7. Contribution approved updates product.
+8. Safe merge does not overwrite verified local fields.
+9. Analysis cache returns existing analysis for unchanged ingredients.
+10. API failure 503 handled gracefully.
+
+Add example test barcodes if useful:
+- 3700026995515
+- 3663518189888
+- 3700036900721
+
+==================================================
+PHASE 16 — DELIVERABLE
+==================================================
+
+At the end, report clearly:
+
+1. Your technical decision note:
+   - which data strategy you chose
+   - why
+   - what you rejected and why
+
+2. Files created/modified
+
+3. Database changes/migrations
+
+4. How to test barcode lookup
+
+5. How to test search
+
+6. How to test contribution submission
+
+7. How to test review approval
+
+8. How images are handled
+
+9. What is still missing or intentionally postponed
+
+10. Any risks or limitations
+
+Important:
+Be honest. If a full native/mobile/frontend piece cannot be completed because the project structure does not support it yet, say so and implement the backend/service foundation instead.

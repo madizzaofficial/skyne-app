@@ -30,3 +30,8 @@ externalPort = 80
 [[ports]]
 localPort = 23911
 externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+EXPO_PUBLIC_API_BASE_URL = "https://7d62b9e7-9458-48b6-a413-21f34af6ae81-00-1iprg86bg0qg3.worf.replit.dev/api"

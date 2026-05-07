@@ -67,6 +67,141 @@ function OptionCard({
   );
 }
 
+const COMMON_ALLERGENS = [
+  "Parfum", "Lanoline", "Formaldéhyde", "Limonène", "Linalool",
+  "Géraniol", "Citronellol", "Eugenol", "Cinnamal", "Coumarine",
+  "Alpha-isomethyl ionone", "Benzyl benzoate", "Benzyl alcool",
+  "Hydroxycitronellal", "Isoeugenol", "Cinnamyl alcool", "Farnesol",
+  "Amyl cinnamal", "Hexyl cinnamal", "Butylphenyl methylpropional",
+  "Méthylisothiazolinone", "Méthylchloroisothiazolinone", "Phénoxyéthanol",
+  "Propylène glycol", "Alcool dénat.", "BHA", "BHT",
+  "Parabènes", "Sulfates (SLS/SLES)", "Acide salicylique",
+  "Quaternium-15", "DMDM hydantoïne", "Chlorphenesin",
+];
+
+function AllergenPicker({
+  selected,
+  input,
+  onInputChange,
+  onAdd,
+  onRemove,
+}: {
+  selected: string[];
+  input: string;
+  onInputChange: (v: string) => void;
+  onAdd: (allergen: string) => void;
+  onRemove: (allergen: string) => void;
+}) {
+  const colors = useColors();
+
+  const suggestions = COMMON_ALLERGENS.filter(
+    (a) =>
+      a.toLowerCase().includes(input.toLowerCase()) &&
+      !selected.includes(a) &&
+      input.trim().length > 0
+  ).slice(0, 6);
+
+  const handleConfirmInput = () => {
+    const trimmed = input.trim();
+    if (trimmed && !selected.includes(trimmed)) {
+      onAdd(trimmed);
+    }
+  };
+
+  return (
+    <View style={{ gap: 10, marginTop: 8 }}>
+      {/* Selected tags */}
+      {selected.length > 0 && (
+        <View style={apStyles.tagsWrap}>
+          {selected.map((tag) => (
+            <Pressable
+              key={tag}
+              style={[apStyles.tag, { backgroundColor: colors.primaryDim, borderColor: colors.primary + "60" }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRemove(tag);
+              }}
+            >
+              <Text style={[apStyles.tagText, { color: colors.primary }]}>{tag}</Text>
+              <Feather name="x" size={12} color={colors.primary} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Input */}
+      <View style={[apStyles.inputRow, { backgroundColor: colors.card, borderColor: input.trim() ? colors.primary : colors.border }]}>
+        <Feather name="search" size={16} color={colors.textSecondary} />
+        <TextInput
+          style={[apStyles.input, { color: colors.textPrimary }]}
+          placeholder="Ex: parfum, lanoline…"
+          placeholderTextColor={colors.textSecondary}
+          value={input}
+          onChangeText={onInputChange}
+          returnKeyType="done"
+          onSubmitEditing={handleConfirmInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {input.trim().length > 0 && (
+          <Pressable
+            style={[apStyles.addBtn, { backgroundColor: colors.primary }]}
+            onPress={handleConfirmInput}
+          >
+            <Feather name="plus" size={14} color="#fff" />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <View style={[apStyles.suggestBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {suggestions.map((s, i) => (
+            <Pressable
+              key={s}
+              style={[
+                apStyles.suggestRow,
+                { borderTopColor: colors.border },
+                i === 0 && { borderTopWidth: 0 },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onAdd(s);
+              }}
+            >
+              <Text style={[apStyles.suggestText, { color: colors.textPrimary }]}>{s}</Text>
+              <View style={[apStyles.suggestPlus, { backgroundColor: colors.primaryDim }]}>
+                <Feather name="plus" size={12} color={colors.primary} />
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Empty hint */}
+      {selected.length === 0 && input.trim().length === 0 && (
+        <Text style={[apStyles.hint, { color: colors.mutedForeground }]}>
+          Tape pour rechercher ou ajoute un allergène personnalisé
+        </Text>
+      )}
+    </View>
+  );
+}
+
+const apStyles = StyleSheet.create({
+  tagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tag: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  tagText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  inputRow: { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+  input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  addBtn: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  suggestBox: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  suggestRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  suggestText: { fontSize: 14, fontFamily: "Inter_500Medium", flex: 1 },
+  suggestPlus: { width: 24, height: 24, borderRadius: 7, alignItems: "center", justifyContent: "center" },
+  hint: { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4 },
+});
+
 export default function Onboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -79,7 +214,8 @@ export default function Onboarding() {
   const [skinType, setSkinType] = useState<SkinType>(null);
   const [concerns, setConcerns] = useState<SkinConcern[]>([]);
   const [hasAllergies, setHasAllergies] = useState<boolean | null>(null);
-  const [allergenesText, setAllergenesText] = useState("");
+  const [allergenesArray, setAllergenesArray] = useState<string[]>([]);
+  const [allergenInput, setAllergenInput] = useState("");
   const [goal, setGoal] = useState<Goal>(null);
   const [routineLevel, setRoutineLevel] = useState<RoutineLevel>(null);
   const [firstName, setFirstName] = useState("");
@@ -161,7 +297,7 @@ export default function Onboarding() {
           skinType,
           concerns,
           hasAllergies,
-          allergenes: allergenesText.split(",").map((s) => s.trim()).filter(Boolean),
+          allergenes: allergenesArray,
           goal,
           routineLevel,
           isComplete: true,
@@ -252,13 +388,15 @@ export default function Onboarding() {
             />
           ))}
           {hasAllergies === true && (
-            <TextInput
-              style={[inputStyle, { borderColor: colors.primary, marginTop: 8 }]}
-              placeholder="Ex: parfum, lanoline, formaldéhyde..."
-              placeholderTextColor={colors.textSecondary}
-              value={allergenesText}
-              onChangeText={setAllergenesText}
-              multiline
+            <AllergenPicker
+              selected={allergenesArray}
+              input={allergenInput}
+              onInputChange={setAllergenInput}
+              onAdd={(a) => {
+                if (!allergenesArray.includes(a)) setAllergenesArray((p) => [...p, a]);
+                setAllergenInput("");
+              }}
+              onRemove={(a) => setAllergenesArray((p) => p.filter((x) => x !== a))}
             />
           )}
         </View>

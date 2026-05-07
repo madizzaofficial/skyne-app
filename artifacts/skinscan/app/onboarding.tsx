@@ -352,7 +352,7 @@ export default function Onboarding() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 24 }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "height" : undefined}
     >
       <View style={styles.topBar}>
         {step > 0 && (

@@ -282,12 +282,45 @@ export default function ProductScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useProfile();
-  const { favorites, toggleFavorite, addToRoutine } = useApp();
+  const { favorites, toggleFavorite, addToRoutine, getProductById } = useApp();
 
-  const product = MOCK_PRODUCTS.find((p) => p.id === id) || MOCK_PRODUCTS[0];
+  const product = getProductById(id ?? "");
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [showWhereToBuy, setShowWhereToBuy] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
+
+  if (!product) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.topBar, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Feather name="arrow-left" size={20} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16, paddingHorizontal: 40 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="package" size={28} color={colors.mutedForeground} />
+          </View>
+          <Text style={{ fontSize: 20, fontFamily: "Inter_700Bold", color: colors.textPrimary, textAlign: "center" }}>
+            Produit introuvable
+          </Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: colors.textSecondary, textAlign: "center", lineHeight: 20 }}>
+            Ce produit n'est pas encore dans notre base de données. Tu peux l'ajouter manuellement.
+          </Text>
+          <Pressable
+            style={{ backgroundColor: colors.primary, borderRadius: 14, paddingHorizontal: 24, paddingVertical: 14 }}
+            onPress={() => router.replace("/add-product")}
+          >
+            <Text style={{ color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" }}>Ajouter le produit</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   const isFav = favorites.includes(product.id);
   const personalScore = 78;

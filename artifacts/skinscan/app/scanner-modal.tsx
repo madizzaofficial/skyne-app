@@ -202,6 +202,7 @@ export default function ScannerModal() {
         <CameraView
           style={StyleSheet.absoluteFillObject}
           facing="back"
+          autofocus="on"
           barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "qr"] }}
           onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
         />

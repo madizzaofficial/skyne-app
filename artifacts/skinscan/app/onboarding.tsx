@@ -129,31 +129,7 @@ function AllergenPicker({
         </View>
       )}
 
-      {/* Input */}
-      <View style={[apStyles.inputRow, { backgroundColor: colors.card, borderColor: input.trim() ? colors.primary : colors.border }]}>
-        <Feather name="search" size={16} color={colors.textSecondary} />
-        <TextInput
-          style={[apStyles.input, { color: colors.textPrimary }]}
-          placeholder="Ex: parfum, lanoline…"
-          placeholderTextColor={colors.textSecondary}
-          value={input}
-          onChangeText={onInputChange}
-          returnKeyType="done"
-          onSubmitEditing={handleConfirmInput}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        {input.trim().length > 0 && (
-          <Pressable
-            style={[apStyles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={handleConfirmInput}
-          >
-            <Feather name="plus" size={14} color="#fff" />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Suggestions */}
+      {/* Suggestions — shown ABOVE input so they're visible when keyboard is open */}
       {suggestions.length > 0 && (
         <View style={[apStyles.suggestBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {suggestions.map((s, i) => (
@@ -178,10 +154,34 @@ function AllergenPicker({
         </View>
       )}
 
+      {/* Input at the bottom */}
+      <View style={[apStyles.inputRow, { backgroundColor: colors.card, borderColor: input.trim() ? colors.primary : colors.border }]}>
+        <Feather name="search" size={16} color={colors.textSecondary} />
+        <TextInput
+          style={[apStyles.input, { color: colors.textPrimary }]}
+          placeholder="Ex: parfum, lanoline…"
+          placeholderTextColor={colors.textSecondary}
+          value={input}
+          onChangeText={onInputChange}
+          returnKeyType="done"
+          onSubmitEditing={handleConfirmInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {input.trim().length > 0 && (
+          <Pressable
+            style={[apStyles.addBtn, { backgroundColor: colors.primary }]}
+            onPress={handleConfirmInput}
+          >
+            <Feather name="plus" size={14} color="#fff" />
+          </Pressable>
+        )}
+      </View>
+
       {/* Empty hint */}
       {selected.length === 0 && input.trim().length === 0 && (
         <Text style={[apStyles.hint, { color: colors.mutedForeground }]}>
-          Tape pour rechercher ou ajoute un allergène personnalisé
+          Tape pour rechercher ou ajouter un allergène personnalisé
         </Text>
       )}
     </View>
@@ -488,17 +488,17 @@ export default function Onboarding() {
   const current = steps[step];
 
   return (
-    <KeyboardAvoidingView
+    <View
       style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 24 }]}
-      behavior={Platform.OS === "ios" ? "height" : undefined}
     >
       <View style={styles.topBar}>
-        {step > 0 && (
-          <Pressable onPress={() => setStep((s) => s - 1)} hitSlop={12}>
-            <Feather name="arrow-left" size={22} color={colors.textPrimary} />
-          </Pressable>
-        )}
-        <View style={[styles.progressBar, { backgroundColor: colors.border, flex: 1, marginLeft: step > 0 ? 16 : 0 }]}>
+        <Pressable
+          onPress={() => step === 0 ? router.replace("/auth") : setStep((s) => s - 1)}
+          hitSlop={12}
+        >
+          <Feather name="arrow-left" size={22} color={colors.textPrimary} />
+        </Pressable>
+        <View style={[styles.progressBar, { backgroundColor: colors.border, flex: 1, marginLeft: 16 }]}>
           <View
             style={[
               styles.progressFill,
@@ -511,53 +511,59 @@ export default function Onboarding() {
         </Text>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top + 24}
       >
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{current.title}</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{current.subtitle}</Text>
-        <View style={styles.options}>
-          {Array.isArray(current.content) ? current.content : current.content}
-        </View>
-      </ScrollView>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-        {!!authError && (
-          <View style={[styles.errorBox, { backgroundColor: colors.dangerDim, borderColor: colors.danger + "40" }]}>
-            <Feather name="alert-circle" size={14} color={colors.danger} />
-            <Text style={[styles.errorText, { color: colors.danger }]}>{authError}</Text>
-          </View>
-        )}
-        <Pressable
-          style={[styles.nextBtn, { backgroundColor: canNext() && !authLoading ? colors.primary : colors.border }]}
-          onPress={handleNext}
-          disabled={!canNext() || authLoading}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {authLoading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Text style={[styles.nextText, { color: canNext() ? "#fff" : colors.textSecondary }]}>
-                {step === TOTAL_STEPS - 1 ? "Créer mon compte" : "Continuer"}
-              </Text>
-              <Feather
-                name={step === TOTAL_STEPS - 1 ? "check" : "arrow-right"}
-                size={18}
-                color={canNext() ? "#fff" : colors.textSecondary}
-              />
-            </>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{current.title}</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{current.subtitle}</Text>
+          <View style={styles.options}>
+            {Array.isArray(current.content) ? current.content : current.content}
+          </View>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          {!!authError && (
+            <View style={[styles.errorBox, { backgroundColor: colors.dangerDim, borderColor: colors.danger + "40" }]}>
+              <Feather name="alert-circle" size={14} color={colors.danger} />
+              <Text style={[styles.errorText, { color: colors.danger }]}>{authError}</Text>
+            </View>
           )}
-        </Pressable>
-        {step === 2 && (
-          <Pressable onPress={handleNext} style={styles.skipBtn}>
-            <Text style={[styles.skipText, { color: colors.textSecondary }]}>Passer cette étape</Text>
+          <Pressable
+            style={[styles.nextBtn, { backgroundColor: canNext() && !authLoading ? colors.primary : colors.border }]}
+            onPress={handleNext}
+            disabled={!canNext() || authLoading}
+          >
+            {authLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Text style={[styles.nextText, { color: canNext() ? "#fff" : colors.textSecondary }]}>
+                  {step === TOTAL_STEPS - 1 ? "Créer mon compte" : "Continuer"}
+                </Text>
+                <Feather
+                  name={step === TOTAL_STEPS - 1 ? "check" : "arrow-right"}
+                  size={18}
+                  color={canNext() ? "#fff" : colors.textSecondary}
+                />
+              </>
+            )}
           </Pressable>
-        )}
-      </View>
-    </KeyboardAvoidingView>
+          {step === 2 && (
+            <Pressable onPress={handleNext} style={styles.skipBtn}>
+              <Text style={[styles.skipText, { color: colors.textSecondary }]}>Passer cette étape</Text>
+            </Pressable>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 

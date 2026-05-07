@@ -1,0 +1,309 @@
+You are working on my mobile app project "Skyne", built with React Native / Expo.
+
+Your task is to implement 3 major features cleanly:
+
+1. Product database architecture integration preparation
+2. Share Extension / Share Intent flow for product page analysis
+3. Smooth animated transitions in the catalogue navigation menus
+
+Before coding:
+- Inspect the project structure.
+- Detect whether the app uses Expo Router, React Navigation, TypeScript, Firebase, and any existing catalogue/product screens.
+- Do not blindly rewrite the whole app.
+- Preserve the current UI style.
+- Make small, clean, testable changes.
+- Explain each file you modify.
+
+==================================================
+FEATURE 1 — PRODUCT DATA ARCHITECTURE PREPARATION
+==================================================
+
+Context:
+The app will use Open Beauty Facts data in the future. There may be around 1M products. Firebase should NOT be used as the main product database because it is not ideal for huge product search/filtering.
+
+Target architecture:
+- Firebase stays for:
+  - authentication
+  - user data
+  - saved products
+  - scan history
+  - personal routines
+  - app preferences
+- Product catalogue will later be handled by:
+  - PostgreSQL / Supabase / Cloud SQL
+  - Meilisearch or Typesense for fast product search
+  - product images stored as URLs initially, not downloaded immediately
+
+For now, implement a clean abstraction layer so the frontend is not locked to Firebase.
+
+Tasks:
+- Create a product data service layer.
+- Do not hardcode Firebase as the product source.
+- Create TypeScript types/interfaces for:
+  - Product
+  - ProductIngredient
+  - ProductImage
+  - ProductCategory
+  - ProductAnalysisResult
+  - ProductSource
+- Create a mock product repository for now.
+- Structure the code so later we can replace the mock repository with an API repository connected to Supabase/Postgres/Meilisearch.
+
+Suggested structure:
+src/
+  types/
+    product.ts
+  services/
+    products/
+      productRepository.ts
+      mockProductRepository.ts
+      productSearchService.ts
+      productAnalysisService.ts
+
+Product fields should include at least:
+- id
+- barcode
+- name
+- brand
+- categories
+- subcategories
+- ingredientsText
+- ingredients
+- imageUrl
+- imageIngredientsUrl
+- source
+- sourceUrl
+- lastUpdatedAt
+
+ProductAnalysisResult should include:
+- productId optional
+- productName
+- brand optional
+- ingredientsText
+- detectedIngredients
+- warnings
+- positivePoints
+- acneSafetyNotes
+- sensitiveSkinNotes
+- fragranceAlcoholNotes
+- comedogenicRiskLevel: "low" | "medium" | "high" | "unknown"
+- irritationRiskLevel: "low" | "medium" | "high" | "unknown"
+- summary
+- confidenceScore
+
+For now, productAnalysisService can use rule-based analysis:
+- detect fragrance/parfum
+- detect alcohol denat / ethanol / isopropyl alcohol
+- detect essential oils
+- detect common allergens such as limonene, linalool, citronellol, geraniol, eugenol
+- detect helpful ingredients like niacinamide, panthenol, glycerin, ceramides, centella asiatica, allantoin
+- do not make medical claims
+- return a clear structured analysis
+
+==================================================
+FEATURE 2 — SHARE EXTENSION / SHARE INTENT FLOW
+==================================================
+
+Goal:
+When a user is on a product page from any website such as Sephora, Atida, Amazon, YesStyle, Stylevana, Nocibé, Notino, etc., they should be able to tap Share → Skyne.
+
+The app should receive the shared URL and open an analysis screen.
+
+Important:
+- Implement this in a way compatible with Expo / React Native.
+- If the current project uses Expo Managed Workflow, check whether a config plugin or a native module is required.
+- If full native Share Extension cannot be completed inside the current Expo setup, implement the best possible foundation:
+  - deep link handling
+  - shared URL intake screen
+  - parsing pipeline
+  - clear TODO comments for native share extension configuration
+- Do not fake a working native share extension if it requires prebuild/native configuration.
+
+Required behavior:
+1. User shares a URL to the app.
+2. App opens the ProductImportAnalysis screen.
+3. The screen receives:
+   - sharedUrl
+   - optional sharedText
+4. The app displays:
+   - "Analyse du produit en cours..."
+   - the URL
+   - loading state
+5. The app tries to extract product info from the URL.
+
+Create a service:
+src/services/import/
+  sharedProductImportService.ts
+
+This service should expose:
+- parseSharedProductInput(input: { url?: string; text?: string })
+- extractUrlFromSharedText(text: string)
+- detectRetailerFromUrl(url: string)
+- fetchProductPageMetadata(url: string)
+- normalizeImportedProduct(rawData)
+
+For now:
+- Implement URL detection.
+- Implement retailer detection for:
+  - amazon
+  - sephora
+  - atida
+  - nocibe
+  - notino
+  - yesstyle
+  - stylevana
+  - other
+- Do NOT scrape aggressively from the mobile app.
+- Create a placeholder backend call function:
+  analyzeProductFromUrl(url: string)
+This function should be clearly separated so later it can call a backend endpoint.
+
+Important architecture note:
+Product page scraping should happen on the backend, not inside the mobile app, because:
+- CORS issues
+- anti-bot protections
+- HTML parsing instability
+- security
+- app performance
+
+So create a frontend-ready flow, but keep scraping/backend extraction behind a service abstraction.
+
+Create or update navigation:
+- Add ProductImportAnalysis screen.
+- Add route that supports deep links like:
+  skyne://import-product?url=...
+  skyne://analyze-url?url=...
+- If Expo Router is used, create the appropriate route file.
+- If React Navigation is used, add the screen to the navigator.
+
+Add deep linking config if missing:
+- scheme: "skyne"
+- support URL handling on app launch and when app is already open.
+
+If the app already has a product analysis screen, reuse it instead of creating duplicate logic.
+
+Expected UX:
+- If URL is valid:
+  - show retailer detected
+  - show "Produit détecté depuis Sephora/Amazon/etc."
+  - show button "Analyser ce produit"
+  - then display the ProductAnalysisResult
+- If URL is invalid:
+  - show a clean error state
+- If product ingredients cannot be extracted yet:
+  - show a fallback state asking user to paste ingredients manually
+  - provide a text area/input for ingredients
+  - allow analysis from pasted ingredients
+
+Manual fallback:
+Create a component:
+src/components/product/ManualIngredientsInput.tsx
+
+It should allow:
+- product name optional
+- brand optional
+- ingredients text required
+- button "Analyser les ingrédients"
+
+Then use productAnalysisService to generate rule-based analysis.
+
+==================================================
+FEATURE 3 — CATALOGUE MENU TRANSITIONS
+==================================================
+
+Goal:
+Improve the catalogue UX when the user clicks:
+- category
+- subcategory
+- product group
+- back button
+
+Current issue:
+The menu transitions are too abrupt.
+
+Tasks:
+- Locate existing catalogue/category/subcategory screens/components.
+- Add smooth transitions when navigating between catalogue levels.
+- Use React Native Reanimated if already installed.
+- If not installed, check if it is safe to add it.
+- If Reanimated is too invasive, use Animated API from React Native.
+- Do not break navigation.
+
+Required animations:
+- Category cards should have a subtle press animation:
+  - scale down slightly on press
+  - fade/opacity feedback
+- When entering a subcategory:
+  - content slides in from the right
+  - slight fade in
+- When going back:
+  - content slides in from the left
+  - slight fade in
+- List items should appear with a subtle staggered fade/translate animation.
+- Keep animations fast and premium:
+  - duration around 180–260ms
+  - no childish bounce
+  - elegant, clean, high-end skincare app feeling
+
+Create reusable components if useful:
+src/components/animations/
+  AnimatedPressable.tsx
+  AnimatedScreenTransition.tsx
+  AnimatedStaggeredList.tsx
+
+Design direction:
+- Premium skincare / clean beauty app
+- Smooth, calm, elegant
+- No cartoonish effects
+- No excessive bounce
+- No ugly default transitions
+
+==================================================
+QUALITY REQUIREMENTS
+==================================================
+
+- Use TypeScript properly.
+- Avoid any "any" type unless absolutely necessary.
+- Avoid duplicated business logic.
+- Keep services separate from UI.
+- Add loading, empty, and error states.
+- Do not break existing screens.
+- Do not remove existing functionality.
+- Keep imports clean.
+- Keep file names consistent with the project conventions.
+- If a dependency is required, explain why before adding it.
+- If native configuration is required, tell me exactly what must be done.
+
+==================================================
+TESTING
+==================================================
+
+After implementation:
+- Run typecheck if available.
+- Run lint if available.
+- Run the app.
+- Confirm:
+  1. Catalogue still works.
+  2. Category/subcategory transitions work.
+  3. Manual ingredients analysis works.
+  4. Deep link route opens correctly.
+  5. Shared URL import screen works with a test URL.
+
+Test deep links with examples:
+skyne://import-product?url=https%3A%2F%2Fwww.sephora.fr%2Fp%2Fexample-product
+skyne://analyze-url?url=https%3A%2F%2Fwww.amazon.fr%2Fdp%2Fexample
+
+If using Expo, mention the command to test deep linking, for example:
+npx uri-scheme open "skyne://import-product?url=https%3A%2F%2Fwww.sephora.fr%2Fproduct" --ios
+npx uri-scheme open "skyne://import-product?url=https%3A%2F%2Fwww.sephora.fr%2Fproduct" --android
+
+==================================================
+DELIVERABLE
+==================================================
+
+At the end, give me:
+- A list of modified files
+- A short explanation of the architecture
+- How to test the share/deep link flow
+- What still requires native iOS/Android configuration if the actual Share Extension cannot be fully enabled inside Expo
+- Any limitation or warning

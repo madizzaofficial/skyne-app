@@ -129,7 +129,31 @@ function AllergenPicker({
         </View>
       )}
 
-      {/* Suggestions — shown ABOVE input so they're visible when keyboard is open */}
+      {/* Input */}
+      <View style={[apStyles.inputRow, { backgroundColor: colors.card, borderColor: input.trim() ? colors.primary : colors.border }]}>
+        <Feather name="search" size={16} color={colors.textSecondary} />
+        <TextInput
+          style={[apStyles.input, { color: colors.textPrimary }]}
+          placeholder="Ex: parfum, lanoline…"
+          placeholderTextColor={colors.textSecondary}
+          value={input}
+          onChangeText={onInputChange}
+          returnKeyType="done"
+          onSubmitEditing={handleConfirmInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {input.trim().length > 0 && (
+          <Pressable
+            style={[apStyles.addBtn, { backgroundColor: colors.primary }]}
+            onPress={handleConfirmInput}
+          >
+            <Feather name="plus" size={14} color="#fff" />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Suggestions below input */}
       {suggestions.length > 0 && (
         <View style={[apStyles.suggestBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {suggestions.map((s, i) => (
@@ -153,30 +177,6 @@ function AllergenPicker({
           ))}
         </View>
       )}
-
-      {/* Input at the bottom */}
-      <View style={[apStyles.inputRow, { backgroundColor: colors.card, borderColor: input.trim() ? colors.primary : colors.border }]}>
-        <Feather name="search" size={16} color={colors.textSecondary} />
-        <TextInput
-          style={[apStyles.input, { color: colors.textPrimary }]}
-          placeholder="Ex: parfum, lanoline…"
-          placeholderTextColor={colors.textSecondary}
-          value={input}
-          onChangeText={onInputChange}
-          returnKeyType="done"
-          onSubmitEditing={handleConfirmInput}
-          autoCorrect={false}
-          autoCapitalize="none"
-        />
-        {input.trim().length > 0 && (
-          <Pressable
-            style={[apStyles.addBtn, { backgroundColor: colors.primary }]}
-            onPress={handleConfirmInput}
-          >
-            <Feather name="plus" size={14} color="#fff" />
-          </Pressable>
-        )}
-      </View>
 
       {/* Empty hint */}
       {selected.length === 0 && input.trim().length === 0 && (
@@ -488,34 +488,31 @@ export default function Onboarding() {
   const current = steps[step];
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 24 }]}
-    >
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => step === 0 ? router.replace("/auth") : setStep((s) => s - 1)}
-          hitSlop={12}
-        >
-          <Feather name="arrow-left" size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={[styles.progressBar, { backgroundColor: colors.border, flex: 1, marginLeft: 16 }]}>
-          <View
-            style={[
-              styles.progressFill,
-              { backgroundColor: colors.primary, width: `${progress * 100}%` },
-            ]}
-          />
-        </View>
-        <Text style={[styles.stepCount, { color: colors.textSecondary }]}>
-          {step + 1}/{TOTAL_STEPS}
-        </Text>
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 24}
+        style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top + 24 }]}
+        behavior={Platform.OS === "ios" ? "height" : undefined}
       >
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={() => step === 0 ? router.replace("/auth") : setStep((s) => s - 1)}
+            hitSlop={12}
+          >
+            <Feather name="arrow-left" size={22} color={colors.textPrimary} />
+          </Pressable>
+          <View style={[styles.progressBar, { backgroundColor: colors.border, flex: 1, marginLeft: 16 }]}>
+            <View
+              style={[
+                styles.progressFill,
+                { backgroundColor: colors.primary, width: `${progress * 100}%` },
+              ]}
+            />
+          </View>
+          <Text style={[styles.stepCount, { color: colors.textSecondary }]}>
+            {step + 1}/{TOTAL_STEPS}
+          </Text>
+        </View>
+
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.content}
@@ -529,7 +526,7 @@ export default function Onboarding() {
           </View>
         </ScrollView>
 
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 16, 32) }]}>
           {!!authError && (
             <View style={[styles.errorBox, { backgroundColor: colors.dangerDim, borderColor: colors.danger + "40" }]}>
               <Feather name="alert-circle" size={14} color={colors.danger} />

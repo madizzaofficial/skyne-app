@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 import { useProfile, SkinType, SkinConcern, Goal, RoutineLevel } from "@/context/ProfileContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -72,6 +73,8 @@ export default function Onboarding() {
   const router = useRouter();
   const { updateProfile, setHasOnboarded } = useProfile();
 
+  const { signUp } = useAuth();
+
   const [step, setStep] = useState(0);
   const [skinType, setSkinType] = useState<SkinType>(null);
   const [concerns, setConcerns] = useState<SkinConcern[]>([]);
@@ -83,6 +86,8 @@ export default function Onboarding() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
 
   const progress = (step + 1) / TOTAL_STEPS;
 
@@ -140,26 +145,45 @@ export default function Onboarding() {
   const handleNext = async () => {
     if (step < TOTAL_STEPS - 1) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setAuthError("");
       setStep((s) => s + 1);
     } else {
       if (!email.trim() || password.length < 6) {
-        Alert.alert("Erreur", "Remplis ton email et un mot de passe d'au moins 6 caractères.");
+        setAuthError("Remplis ton email et un mot de passe d'au moins 6 caractères.");
         return;
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await updateProfile({
-        firstName,
-        skinType,
-        concerns,
-        hasAllergies,
-        allergenes: allergenesText.split(",").map((s) => s.trim()).filter(Boolean),
-        goal,
-        routineLevel,
-        isComplete: true,
-        accountType: "free",
-      });
-      await setHasOnboarded(true);
-      router.replace("/(tabs)");
+      setAuthLoading(true);
+      setAuthError("");
+      try {
+        await signUp(email.trim(), password, firstName.trim());
+        await updateProfile({
+          firstName,
+          skinType,
+          concerns,
+          hasAllergies,
+          allergenes: allergenesText.split(",").map((s) => s.trim()).filter(Boolean),
+          goal,
+          routineLevel,
+          isComplete: true,
+          accountType: "free",
+        });
+        await setHasOnboarded(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/(tabs)");
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code ?? "";
+        if (code === "auth/email-already-in-use") {
+          setAuthError("Cet email est déjà utilisé. Connecte-toi à la place.");
+        } else if (code === "auth/invalid-email") {
+          setAuthError("Adresse email invalide.");
+        } else if (code === "auth/network-request-failed") {
+          setAuthError("Problème réseau. Vérifie ta connexion.");
+        } else {
+          setAuthError("Erreur inattendue. Réessaie.");
+        }
+      } finally {
+        setAuthLoading(false);
+      }
     }
   };
 
@@ -363,19 +387,31 @@ export default function Onboarding() {
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        {!!authError && (
+          <View style={[styles.errorBox, { backgroundColor: colors.dangerDim, borderColor: colors.danger + "40" }]}>
+            <Feather name="alert-circle" size={14} color={colors.danger} />
+            <Text style={[styles.errorText, { color: colors.danger }]}>{authError}</Text>
+          </View>
+        )}
         <Pressable
-          style={[styles.nextBtn, { backgroundColor: canNext() ? colors.primary : colors.border }]}
+          style={[styles.nextBtn, { backgroundColor: canNext() && !authLoading ? colors.primary : colors.border }]}
           onPress={handleNext}
-          disabled={!canNext()}
+          disabled={!canNext() || authLoading}
         >
-          <Text style={[styles.nextText, { color: canNext() ? "#fff" : colors.textSecondary }]}>
-            {step === TOTAL_STEPS - 1 ? "Créer mon compte" : "Continuer"}
-          </Text>
-          <Feather
-            name={step === TOTAL_STEPS - 1 ? "check" : "arrow-right"}
-            size={18}
-            color={canNext() ? "#fff" : colors.textSecondary}
-          />
+          {authLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Text style={[styles.nextText, { color: canNext() ? "#fff" : colors.textSecondary }]}>
+                {step === TOTAL_STEPS - 1 ? "Créer mon compte" : "Continuer"}
+              </Text>
+              <Feather
+                name={step === TOTAL_STEPS - 1 ? "check" : "arrow-right"}
+                size={18}
+                color={canNext() ? "#fff" : colors.textSecondary}
+              />
+            </>
+          )}
         </Pressable>
         {step === 2 && (
           <Pressable onPress={handleNext} style={styles.skipBtn}>
@@ -416,8 +452,10 @@ const styles = StyleSheet.create({
   recapLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
   recapValue: { fontSize: 13, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
   footer: { paddingTop: 16, gap: 12 },
-  nextBtn: { borderRadius: 14, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  nextBtn: { borderRadius: 14, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 52 },
   nextText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   skipBtn: { alignItems: "center", paddingVertical: 4 },
   skipText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  errorBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 10, borderWidth: 1, padding: 12 },
+  errorText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1, lineHeight: 18 },
 });

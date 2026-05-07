@@ -236,7 +236,7 @@ export default function AuthScreen() {
           style={[styles.registerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push("/register");
+            router.push("/onboarding");
           }}
         >
           <View style={[styles.registerIcon, { backgroundColor: colors.primaryDim }]}>

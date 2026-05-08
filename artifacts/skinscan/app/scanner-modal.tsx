@@ -40,20 +40,36 @@ function extractBarcode(input: string): string | null {
 
 // ─── Lookup helper: Firestore → OBF → mock ──────────────────────────────────
 async function lookupProduct(barcode: string, addScannedProduct: (p: Product) => void): Promise<Product | null> {
-  // 1. Firestore
+  // 1. Firestore — only use if it has a photo AND enough ingredients (≥10)
+  //    A cached record with 5 ingredients or no image means OBF had incomplete data; re-fetch.
   const fsProd = await getFirestoreProductByBarcode(barcode);
-  if (fsProd) { addScannedProduct(fsProd); return fsProd; }
-
-  // 2. OBF live API
-  const obfProd = await obfLookup(barcode);
-  if (obfProd) {
-    addScannedProduct(obfProd);
-    // Save to Firestore (fire-and-forget — non-blocking)
-    saveProductToFirestore(obfProd).catch(() => {});
-    return obfProd;
+  const cacheIsGood = !!fsProd && fsProd.ingredients.length >= 10 && !!fsProd.image;
+  if (cacheIsGood && fsProd) {
+    addScannedProduct(fsProd);
+    return fsProd;
   }
 
-  // 3. Local mock fallback
+  // 2. OBF live API — fetch for full INCI data and images
+  const obfProd = await obfLookup(barcode);
+  if (obfProd) {
+    // Merge: take OBF data (complete) but keep Firestore name if OBF name is generic
+    const final: Product = fsProd
+      ? {
+          ...obfProd,
+          name: obfProd.name !== "Produit inconnu" ? obfProd.name : fsProd.name,
+          image: obfProd.image || fsProd.image,
+        }
+      : obfProd;
+    addScannedProduct(final);
+    // Persist the enriched record so next lookup is instant
+    if (final.ingredients.length > 0) saveProductToFirestore(final).catch(() => {});
+    return final;
+  }
+
+  // 3. Firestore record without ingredients (better than nothing)
+  if (fsProd) { addScannedProduct(fsProd); return fsProd; }
+
+  // 4. Local mock fallback
   const mock = MOCK_PRODUCTS.find((p) => p.id === barcode || p.barcode === barcode);
   if (mock) { addScannedProduct(mock); return mock; }
 
@@ -90,11 +106,19 @@ export default function ScannerModal() {
     const product = await lookupProduct(data, addScannedProduct);
     if (product) {
       addToHistory(product.id);
-      router.back();
-      setTimeout(() => router.push(`/product/${product.id}`), 100);
+      if (router.canGoBack()) {
+        router.back();
+        setTimeout(() => router.push(`/product/${product.id}`), 100);
+      } else {
+        router.replace(`/product/${product.id}`);
+      }
     } else {
-      router.back();
-      setTimeout(() => router.push("/add-product"), 100);
+      if (router.canGoBack()) {
+        router.back();
+        setTimeout(() => router.push("/add-product"), 100);
+      } else {
+        router.replace("/add-product");
+      }
     }
   };
 

@@ -22,7 +22,7 @@ import { ScoreBlock } from "@/components/ScoreBlock";
 import { useApp } from "@/context/AppContext";
 import { useProfile } from "@/context/ProfileContext";
 import { useColors } from "@/hooks/useColors";
-import { MOCK_PRODUCTS, Ingredient, RetailerInfo, Review } from "@/constants/mockData";
+import { Ingredient, RetailerInfo, Review } from "@/constants/mockData";
 
 function IngredientSheet({
   ingredient,
@@ -282,7 +282,7 @@ export default function ProductScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { profile } = useProfile();
-  const { favorites, toggleFavorite, addToRoutine, getProductById } = useApp();
+  const { favorites, toggleFavorite, addToRoutine, getProductById, allProducts } = useApp();
 
   const product = getProductById(id ?? "");
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
@@ -294,7 +294,7 @@ export default function ProductScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.topBar, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
             hitSlop={12}
             style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
@@ -323,21 +323,54 @@ export default function ProductScreen() {
   }
 
   const isFav = favorites.includes(product.id);
-  const personalScore = 78;
   const userAllergens = profile.allergenes.map((a) => a.toLowerCase());
 
-  const isUserAllergen = (ingredient: Ingredient) =>
-    userAllergens.some((a) =>
-      ingredient.inci.toLowerCase().includes(a) || ingredient.commonName.toLowerCase().includes(a)
-    ) || ingredient.inci.toLowerCase().includes("parfum");
+  const isUserAllergen = (ingredient: Ingredient | null | undefined): boolean => {
+    if (!ingredient?.inci) return false;
+    return (
+      userAllergens.some(
+        (a) =>
+          ingredient.inci.toLowerCase().includes(a) ||
+          ingredient.commonName.toLowerCase().includes(a)
+      ) || ingredient.inci.toLowerCase().includes("parfum")
+    );
+  };
 
   const safeCount = product.ingredients.filter((i) => i.safetyLevel === "safe").length;
   const cautionCount = product.ingredients.filter((i) => i.safetyLevel === "caution").length;
   const avoidCount = product.ingredients.filter((i) => i.safetyLevel === "avoid").length;
+  const hasAllergen = product.ingredients.some((i) => isUserAllergen(i));
 
-  const alternatives = MOCK_PRODUCTS.filter(
-    (p) => p.id !== product.id && p.category === product.category
-  ).slice(0, 3);
+  const personalScore = (() => {
+    const total = product.ingredients.length;
+    if (total === 0) return 0;
+    const raw =
+      90 * (safeCount / total) -
+      30 * (cautionCount / total) -
+      50 * (avoidCount / total) -
+      (hasAllergen ? 10 : 0);
+    return Math.max(5, Math.min(100, Math.round(raw)));
+  })();
+
+  const scoreReasons: string[] = (() => {
+    if (product.ingredients.length === 0)
+      return ["Composition non disponible dans Open Beauty Facts"];
+    const r: string[] = [];
+    if (safeCount > 0) r.push(`${safeCount} ingrédient${safeCount > 1 ? "s" : ""} sûr${safeCount > 1 ? "s" : ""}`);
+    if (avoidCount > 0) r.push(`${avoidCount} ingrédient${avoidCount > 1 ? "s" : ""} à éviter`);
+    if (hasAllergen) r.push("Contient un allergène potentiel");
+    if (product.properties.fragranceFree) r.push("Sans parfum");
+    if (product.properties.parabenFree) r.push("Sans paraben");
+    return r.slice(0, 3);
+  })();
+
+  const alternatives = (() => {
+    const sameCategory = allProducts.filter(
+      (p) => p.id !== product.id && p.category === product.category
+    );
+    if (sameCategory.length >= 2) return sameCategory.slice(0, 3);
+    return allProducts.filter((p) => p.id !== product.id).slice(0, 3);
+  })();
 
   const props = product.properties;
   const checkboxItems = [
@@ -368,7 +401,7 @@ export default function ProductScreen() {
       {/* Floating header */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
           hitSlop={12}
           style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
@@ -438,11 +471,7 @@ export default function ProductScreen() {
         {/* Score */}
         <ScoreBlock
           score={personalScore}
-          reasons={
-            isUserAllergen(product.ingredients.find((i) => i.inci === "Parfum") || product.ingredients[0])
-              ? ["Contient un allergène potentiel (Parfum)", "2 bénéfices pour ta peau"]
-              : ["Compatible avec peau grasse", "Contrôle du sébum + Niacinamide"]
-          }
+          reasons={scoreReasons}
         />
 
         {/* Where to buy */}
@@ -506,7 +535,14 @@ export default function ProductScreen() {
                 <Text style={[styles.legendText, { color: colors.textSecondary }]}>{avoidCount} à éviter</Text>
               </View>
             </View>
-            {product.ingredients.map((ingredient) => (
+            {product.ingredients.length === 0 ? (
+              <View style={[styles.noDataBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Feather name="alert-circle" size={16} color={colors.mutedForeground} />
+                <Text style={[styles.noDataText, { color: colors.textSecondary }]}>
+                  Composition INCI non disponible dans Open Beauty Facts pour ce produit.
+                </Text>
+              </View>
+            ) : product.ingredients.map((ingredient) => (
               <IngredientRow
                 key={ingredient.id}
                 ingredient={ingredient}
@@ -930,4 +966,14 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "80%",
   },
+  noDataBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  noDataText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 });

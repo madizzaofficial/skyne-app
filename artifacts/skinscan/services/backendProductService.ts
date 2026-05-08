@@ -154,26 +154,46 @@ function parseIngredients(inciText: string): Ingredient[] {
 
 function mapCategory(categories: string[] | null): { category: string; subcategory: string } {
   const cat = (categories?.join(", ") ?? "").toLowerCase();
-  if (cat.includes("face") || cat.includes("visage") || cat.includes("facial")) {
-    if (cat.includes("cleanser") || cat.includes("wash") || cat.includes("nettoyant")) return { category: "Visage", subcategory: "Nettoyant" };
+  const isOil = cat.includes("huile") || cat.includes("cleansing-oil") || cat.includes("-oils") || cat.includes(" oil");
+  const isCleanser = cat.includes("cleanser") || cat.includes("cleansing") || cat.includes("nettoyant") || cat.includes("lavant") || cat.includes("wash");
+  const isFace = cat.includes("face") || cat.includes("visage") || cat.includes("facial") || cat.includes("face-hygiene");
+  const isBody = cat.includes("body") || cat.includes("corps") || cat.includes("bath") || cat.includes("bain") || cat.includes("shower") || cat.includes("douche");
+  const isHair = cat.includes("hair") || cat.includes("cheveux") || cat.includes("shampoo");
+
+  if (isFace) {
+    if (isCleanser && isOil) return { category: "Visage", subcategory: "Huile nettoyante" };
+    if (isCleanser) return { category: "Visage", subcategory: "Nettoyant" };
     if (cat.includes("serum") || cat.includes("sérum")) return { category: "Visage", subcategory: "Sérum" };
     if (cat.includes("moisturiz") || cat.includes("hydrat") || cat.includes("cream") || cat.includes("crème")) return { category: "Visage", subcategory: "Hydratant" };
     if (cat.includes("exfoliat") || cat.includes("scrub")) return { category: "Visage", subcategory: "Exfoliant" };
     if (cat.includes("toner") || cat.includes("lotion")) return { category: "Visage", subcategory: "Toner" };
     if (cat.includes("mask") || cat.includes("masque")) return { category: "Visage", subcategory: "Masque" };
+    if (isOil) return { category: "Visage", subcategory: "Huile visage" };
     return { category: "Visage", subcategory: "Soin visage" };
   }
-  if (cat.includes("hair") || cat.includes("cheveux") || cat.includes("shampoo")) {
+  if (isHair) {
     if (cat.includes("shampoo") || cat.includes("shampoing")) return { category: "Cheveux", subcategory: "Shampoing" };
     if (cat.includes("conditioner") || cat.includes("après")) return { category: "Cheveux", subcategory: "Après-shampoing" };
+    if (isOil) return { category: "Cheveux", subcategory: "Huile capillaire" };
     return { category: "Cheveux", subcategory: "Soin cheveux" };
   }
-  if (cat.includes("sun") || cat.includes("solaire") || cat.includes("spf")) return { category: "Solaire", subcategory: "SPF visage" };
-  if (cat.includes("body") || cat.includes("corps")) {
-    if (cat.includes("wash") || cat.includes("douche")) return { category: "Corps", subcategory: "Gel douche" };
+  if (cat.includes("sun") || cat.includes("solaire") || cat.includes("spf")) return { category: "Solaire", subcategory: "SPF" };
+  if (isBody) {
+    if (isCleanser || cat.includes("shower") || cat.includes("bain") || cat.includes("bath")) {
+      if (isOil) return { category: "Corps", subcategory: "Huile nettoyante" };
+      return { category: "Corps", subcategory: "Gel douche" };
+    }
+    if (isOil) return { category: "Corps", subcategory: "Huile corps" };
     return { category: "Corps", subcategory: "Crème corps" };
   }
-  return { category: "Visage", subcategory: "Soin" };
+  if (cat.includes("eye") || cat.includes("yeux")) return { category: "Yeux", subcategory: "Contour yeux" };
+  if (cat.includes("lip") || cat.includes("lèvre")) return { category: "Visage", subcategory: "Lèvres" };
+  if (isCleanser) {
+    if (isOil) return { category: "Corps", subcategory: "Huile nettoyante" };
+    return { category: "Corps", subcategory: "Nettoyant" };
+  }
+  if (isOil) return { category: "Corps", subcategory: "Huile soin" };
+  return { category: "Corps", subcategory: "Soin" };
 }
 
 function apiProductToProduct(p: ApiProduct): Product {
@@ -213,11 +233,12 @@ function apiProductToProduct(p: ApiProduct): Product {
     },
     reviews: [],
     price: "",
-    incompatibilities: ingredients
-      .filter((i) => i.safetyLevel === "caution" || i.safetyLevel === "avoid")
-      .flatMap((i) => i.concerns)
-      .filter(Boolean)
-      .slice(0, 3),
+    incompatibilities: [...new Set(
+      ingredients
+        .filter((i) => i.safetyLevel === "caution" || i.safetyLevel === "avoid")
+        .flatMap((i) => i.concerns)
+        .filter(Boolean)
+    )].slice(0, 4),
     whereToBuy: [],
   };
 }

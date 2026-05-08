@@ -12,10 +12,8 @@ export default function Index() {
     if (authLoading) return; // wait for Firebase to resolve auth state
 
     if (user) {
-      // Authenticated via Firebase — check onboarding status
-      AsyncStorage.getItem("@skinscan_onboarded").then((onboarded) => {
-        setDestination(onboarded === "true" ? "/(tabs)" : "/onboarding");
-      });
+      // Authenticated via Firebase — existing account, go straight to the app
+      setDestination("/(tabs)");
       return;
     }
 

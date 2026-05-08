@@ -24,7 +24,7 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signIn, redirectLoading } = useAuth();
-  const { updateProfile, hasOnboarded } = useProfile();
+  const { updateProfile, hasOnboarded, setHasOnboarded } = useProfile();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +47,8 @@ export default function AuthScreen() {
     try {
       await signIn(email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      navigate(hasOnboarded);
+      await setHasOnboarded(true);
+      router.replace("/(tabs)");
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? "";
       if (

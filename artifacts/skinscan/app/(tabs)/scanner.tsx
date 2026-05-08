@@ -22,6 +22,11 @@ import {
   lookupProductByBarcodeViaBackend,
   searchProductsViaBackend,
 } from "@/services/backendProductService";
+import { lookupByBarcode as obfLookupByBarcode } from "@/services/openBeautyFacts";
+import {
+  lookupProductByBarcode as firestoreLookupByBarcode,
+  saveProductToFirestore,
+} from "@/services/firestoreProducts";
 
 type ScanMode = "barcode" | "search" | "inci";
 
@@ -99,18 +104,41 @@ export default function ScannerScreen() {
         return;
       }
 
-      // 2. Backend API (local DB → Open Beauty Facts fallback)
       setScanStatus("Recherche du produit…");
-      const { product: backendProduct, message } = await lookupProductByBarcodeViaBackend(data);
-      if (backendProduct) {
-        addScannedProduct(backendProduct);
-        addToHistory(backendProduct.id);
-        router.push(`/product/${backendProduct.id}`);
+
+      // 2. Firestore (cached — only if already has INCI data)
+      const fsProd = await firestoreLookupByBarcode(data);
+      if (fsProd && fsProd.ingredients.length > 0) {
+        addScannedProduct(fsProd);
+        addToHistory(fsProd.id);
+        router.push(`/product/${fsProd.id}`);
         return;
       }
 
-      // 3. Not found — offer contribution
-      setScanStatus(message);
+      // 3. Open Beauty Facts direct lookup (always for full INCI)
+      setScanStatus("Analyse des ingrédients…");
+      const obfProd = await obfLookupByBarcode(data);
+      if (obfProd) {
+        const final = fsProd
+          ? { ...fsProd, ingredients: obfProd.ingredients, properties: obfProd.properties, incompatibilities: obfProd.incompatibilities }
+          : obfProd;
+        addScannedProduct(final);
+        addToHistory(final.id);
+        if (final.ingredients.length > 0) saveProductToFirestore(final).catch(() => {});
+        router.push(`/product/${final.id}`);
+        return;
+      }
+
+      // 4. Firestore without INCI (better than nothing)
+      if (fsProd) {
+        addScannedProduct(fsProd);
+        addToHistory(fsProd.id);
+        router.push(`/product/${fsProd.id}`);
+        return;
+      }
+
+      // 5. Not found — offer contribution
+      setScanStatus("Produit introuvable dans Open Beauty Facts");
       router.push("/add-product");
     } finally {
       setScanLoading(false);
@@ -309,6 +337,23 @@ export default function ScannerScreen() {
           <ModeTab m="search" label="Recherche" icon="search" />
           <ModeTab m="inci" label="Liste INCI" icon="edit-3" />
         </View>
+
+        {/* Share Extension shortcut */}
+        <Pressable
+          style={[styles.linkImportBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/import-product");
+          }}
+        >
+          <View style={[styles.linkImportIcon, { backgroundColor: colors.primaryDim }]}>
+            <Feather name="link" size={14} color={colors.primary} />
+          </View>
+          <Text style={[styles.linkImportText, { color: colors.textSecondary }]}>
+            Analyser depuis un lien produit (Amazon, Sephora…)
+          </Text>
+          <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+        </Pressable>
       </View>
 
       {mode === "barcode" && renderBarcodeMode()}
@@ -473,6 +518,24 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   modeTabText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  linkImportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  linkImportIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  linkImportText: { flex: 1, fontSize: 12, fontFamily: "Inter_500Medium" },
   cameraContainer: { flex: 1, position: "relative" },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   scanLoadingOverlay: {

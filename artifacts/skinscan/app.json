@@ -21,7 +21,33 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0A0A0A"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "www.amazon.fr" },
+            { "scheme": "https", "host": "amazon.fr" },
+            { "scheme": "https", "host": "www.sephora.fr" },
+            { "scheme": "https", "host": "sephora.fr" },
+            { "scheme": "https", "host": "www.nocibe.fr" },
+            { "scheme": "https", "host": "nocibe.fr" },
+            { "scheme": "https", "host": "www.notino.fr" },
+            { "scheme": "https", "host": "notino.fr" },
+            { "scheme": "https", "host": "www.yesstyle.com" },
+            { "scheme": "https", "host": "yesstyle.com" },
+            { "scheme": "https", "host": "www.stylevana.com" },
+            { "scheme": "https", "host": "stylevana.com" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "SEND",
+          "data": [{ "mimeType": "text/plain" }],
+          "category": ["DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"

@@ -29,7 +29,7 @@ import {
   importOBFProducts,
   searchProductsInFirestore,
 } from "@/services/firestoreProducts";
-import { searchProducts } from "@/services/openBeautyFacts";
+import { fetchProductsByCategory as obfBrowseCategory, searchProducts } from "@/services/openBeautyFacts";
 
 // ─── Category taxonomy ─────────────────────────────────────────────────────────
 interface SubSubCat {
@@ -137,7 +137,151 @@ const CATEGORIES: CatConfig[] = [
   },
 ];
 
-// ─── Nav state ─────────────────────────────────────────────────────────────────
+// ─── Category ID → stored Firestore value (case must match exactly) ─────────────────
+const CAT_ID_TO_NAME: Record<string, string> = {
+  visage: "Visage",
+  corps: "Corps",
+  cheveux: "Cheveux",
+  hygiene: "Hygiène",
+  maquillage: "Maquillage",
+  solaire: "Solaire",
+};
+
+// OBF category slug per cat ID (top-level fallback)
+const CAT_ID_TO_OBF_SLUG: Record<string, string> = {
+  visage: "face-creams",
+  corps: "body-lotions",
+  cheveux: "shampoos",
+  solaire: "sunscreens",
+  hygiene: "deodorants",
+  maquillage: "foundations",
+};
+
+// OBF slug per sub/subsub ID (more specific — overrides cat-level slug)
+const SUBCAT_TO_OBF_SLUG: Record<string, string> = {
+  hydratant: "face-creams", creme_jour: "face-creams", creme_nuit: "face-creams", gel_hydratant: "face-gels",
+  serum: "serums-for-the-face", serum_vit_c: "serums-for-the-face", serum_retinol: "serums-for-the-face", huile_visage: "face-oils",
+  nettoyant: "facial-cleansers", gel_nettoyant: "facial-cleansers", mousse_nettoyante: "facial-cleansers",
+  eau_micellaire: "micellar-waters", lait_nettoyant: "facial-cleansers", huile_demaquillante: "face-oils",
+  toner: "toners", lotion_tonique: "toners", eau_florale: "toners", essence: "toners",
+  masque_visage: "face-masks", masque_argile: "face-masks", masque_tissu: "face-masks", masque_nuit: "face-masks",
+  exfoliant_visage: "exfoliants-for-the-face", exfoliant_chim: "exfoliants-for-the-face",
+  soin_yeux: "eye-creams", creme_yeux: "eye-creams", serum_yeux: "eye-creams",
+  soin_levres: "lip-balms", baume_levres: "lip-balms",
+  hydratant_corps: "body-lotions", lotion_corps: "body-lotions", creme_corps: "body-creams", beurre_corps: "body-butters", huile_corps: "body-oils",
+  nettoyant_corps: "shower-gels", gel_douche: "shower-gels", savon: "soaps", bain_moussant: "shower-gels",
+  exfoliant_corps: "body-scrubs", gommage_corps: "body-scrubs",
+  creme_mains: "hand-creams",
+  shampoing: "shampoos", shampoing_doux: "shampoos", shampoing_sec: "dry-shampoos", shampoing_pellicules: "shampoos",
+  apres_shampoing: "conditioners", revitalisant: "conditioners",
+  masque_cheveux: "hair-masks", masque_nourrissant: "hair-masks",
+  serum_cheveux: "hair-oils", huile_capi: "hair-oils",
+  protection: "sunscreens", spf50: "sunscreens", spf30: "sunscreens", spf_visage: "sunscreens",
+  apres_soleil: "after-sun-products",
+  deodorant: "deodorants", antitranspirant: "deodorants",
+  dentaire: "toothpastes", dentifrice: "toothpastes",
+};
+
+// Sub-subcategory IDs that need OBF text search instead of category browse
+// (because multiple subsubs share the same OBF category slug)
+const SUBCAT_TO_SEARCH_TERM: Record<string, string> = {
+  // Masques visage
+  masque_argile: "masque argile clay mask face",
+  masque_tissu: "sheet mask tissu face",
+  masque_peel: "peel off mask visage",
+  masque_nuit: "masque nuit sleeping mask",
+  // Sérums
+  serum_vit_c: "sérum vitamine C vitamin C serum",
+  serum_retinol: "sérum rétinol retinol serum",
+  // Hydratants visage
+  creme_jour: "crème de jour day cream moisturizer",
+  creme_nuit: "crème de nuit night cream",
+  gel_hydratant: "gel hydratant face water gel",
+  bb_cc: "BB cream CC cream teinte",
+  // Nettoyants visage
+  gel_nettoyant: "gel nettoyant facial cleanser",
+  mousse_nettoyante: "mousse nettoyante foam cleanser",
+  lait_nettoyant: "lait nettoyant milk cleanser",
+  huile_demaquillante: "huile démaquillante cleansing oil",
+  // Toners
+  lotion_tonique: "lotion tonique toner",
+  eau_florale: "eau florale floral water",
+  essence: "essence skin care",
+  // Exfoliants
+  gommage_visage: "gommage visage face scrub",
+  exfoliant_chim: "exfoliant chimique AHA BHA",
+  // Yeux
+  creme_yeux: "crème contour yeux eye cream",
+  serum_yeux: "sérum yeux eye serum",
+  patch_yeux: "patch yeux eye patch",
+  // Lèvres
+  baume_levres: "baume lèvres lip balm",
+  gommage_levres: "gommage lèvres lip scrub",
+  // Corps
+  lotion_corps: "lotion corps body lotion",
+  creme_corps: "crème corps body cream",
+  beurre_corps: "beurre corps body butter",
+  savon: "savon corps soap",
+  bain_moussant: "bain moussant bubble bath",
+  huile_bain: "huile bain bath oil",
+  // Cheveux
+  shampoing_doux: "shampoing doux gentle shampoo",
+  shampoing_sec: "shampoing sec dry shampoo",
+  shampoing_solide: "shampoing solide solid shampoo",
+  shampoing_pellicules: "shampoing antipelliculaire dandruff",
+  revitalisant: "revitalisant conditioner",
+  demelant: "démëlant spray leave-in",
+  masque_nourrissant: "masque nourrissant nourishing hair mask",
+  masque_reparateur: "masque réparateur repairing hair mask",
+  masque_brillance: "masque brillance shine hair mask",
+  serum_capi: "sérum cheveux hair serum",
+  soin_sans_rincage: "soin sans rinçage leave-in treatment",
+  // Solaire
+  spf50: "SPF 50 sunscreen",
+  spf30: "SPF 30 sunscreen",
+  spf_visage: "SPF visage face sunscreen",
+  spf_enfant: "SPF enfant children sunscreen",
+  gel_apsol: "gel après-soleil after sun gel",
+  lait_apsol: "lait après-soleil after sun lotion",
+  lotion_autobronz: "autobronzant lotion self tanner",
+  // Maquillage
+  fond_teint: "fond de teint foundation",
+  correcteur: "correcteur anticerne concealer",
+  mascara: "mascara yeux",
+  rouge_levres: "rouge à lèvres lipstick",
+  // Hygiène
+  antitranspirant: "anti-transpirant déodorant",
+  deo_bille: "déodorant bille roll-on",
+  deo_spray: "déodorant spray",
+  deo_stick: "déodorant stick",
+  deo_solide: "déodorant solide",
+  pierre_alun: "pierre alun deodorant",
+  dentifrice: "dentifrice toothpaste",
+  bain_bouche: "bain de bouche mouthwash",
+  gel_intime: "gel intime intimate",
+};
+
+// Firestore subcategory value per sub ID (must match what mapCategory() stores)
+const SUBCAT_TO_FIRESTORE_NAME: Record<string, string> = {
+  hydratant: "Hydratant", creme_jour: "Hydratant", creme_nuit: "Hydratant",
+  serum: "Sérum", huile_visage: "Huile visage",
+  nettoyant: "Nettoyant",
+  toner: "Toner",
+  masque_visage: "Masque",
+  exfoliant_visage: "Exfoliant",
+  soin_yeux: "Contour yeux",
+  soin_levres: "Lèvres",
+  hydratant_corps: "Crème corps", lotion_corps: "Crème corps",
+  nettoyant_corps: "Gel douche", gel_douche: "Gel douche",
+  huile_corps: "Huile corps",
+  shampoing: "Shampoing",
+  apres_shampoing: "Après-shampoing",
+  masque_cheveux: "Masque cheveux",
+  serum_cheveux: "Huile capillaire",
+  protection: "SPF", spf50: "SPF", spf30: "SPF", spf_visage: "SPF",
+};
+
+// ─── Nav state ───────────────────────────────────────────────────────────────────────────────
 type NavLevel = "cats" | "subcats" | "subsubcats" | "products";
 type NavDirection = "forward" | "backward" | "none";
 
@@ -164,7 +308,13 @@ function ProductRow({ product }: { product: Product }) {
   const colors = useColors();
   const router = useRouter();
   const { addScannedProduct, addToHistory } = useApp();
-  const score = Math.floor(50 + Math.random() * 45);
+  const safeCount = product.ingredients.filter((i) => i.safetyLevel === "safe").length;
+  const cautionCount = product.ingredients.filter((i) => i.safetyLevel === "caution").length;
+  const avoidCount = product.ingredients.filter((i) => i.safetyLevel === "avoid").length;
+  const total = product.ingredients.length;
+  const score = total === 0 ? 0 : Math.max(5, Math.min(100, Math.round(
+    90 * (safeCount / total) - 30 * (cautionCount / total) - 50 * (avoidCount / total)
+  )));
 
   return (
     <Pressable
@@ -375,18 +525,57 @@ export default function CatalogueScreen() {
   // Load products when reaching product level
   useEffect(() => {
     if (nav.level !== "products") return;
+    let cancelled = false;
     setProdLoading(true);
     const catId = nav.cat?.id ?? "";
-    getProductsByCategory(catId, undefined, 40)
-      .then((prods) => {
-        if (prods.length > 0) {
-          setProducts(prods);
-        } else {
-          setProducts(MOCK_PRODUCTS.filter((p) => p.category?.toLowerCase() === catId));
+    const catName = CAT_ID_TO_NAME[catId] ?? catId;
+
+    (async () => {
+      try {
+        const subId = nav.sub?.id ?? "";
+        const subsubId = nav.subsub?.id ?? "";
+        const subcatName = SUBCAT_TO_FIRESTORE_NAME[subsubId] ?? SUBCAT_TO_FIRESTORE_NAME[subId];
+        const slug =
+          SUBCAT_TO_OBF_SLUG[subsubId] ??
+          SUBCAT_TO_OBF_SLUG[subId] ??
+          CAT_ID_TO_OBF_SLUG[catId];
+        // Use text search for granular subsubs that share an OBF slug with siblings
+        const searchTerm = SUBCAT_TO_SEARCH_TERM[subsubId] ?? SUBCAT_TO_SEARCH_TERM[subId];
+
+        // 1. Firestore (with subcategory filter when available)
+        const fsPrds = await getProductsByCategory(catName, subcatName, 40);
+        if (!cancelled && fsPrds.length > 0) { setProducts(fsPrds); return; }
+
+        // 2a. OBF text search (more specific — avoids identical products across subsubs)
+        if (searchTerm) {
+          const searchPrds = await searchProducts(searchTerm, 30);
+          if (!cancelled && searchPrds.length > 0) {
+            searchPrds.forEach((p) => addScannedProduct(p));
+            setProducts(searchPrds);
+            return;
+          }
         }
-      })
-      .finally(() => setProdLoading(false));
-  }, [nav]);
+
+        // 2b. OBF category browse fallback (when no search term or search returned nothing)
+        if (slug) {
+          const obfPrds = await obfBrowseCategory(slug, 40);
+          if (!cancelled && obfPrds.length > 0) {
+            obfPrds.forEach((p) => addScannedProduct(p));
+            setProducts(obfPrds);
+            return;
+          }
+        }
+
+        // 3. Local mocks as last resort
+        if (!cancelled)
+          setProducts(MOCK_PRODUCTS.filter((p) => p.category?.toLowerCase() === catId));
+      } finally {
+        if (!cancelled) setProdLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [nav, addScannedProduct]);
 
   const handleSearch = useCallback(
     (q: string) => {

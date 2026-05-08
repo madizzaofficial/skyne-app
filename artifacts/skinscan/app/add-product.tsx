@@ -52,7 +52,7 @@ export default function AddProductScreen() {
     Alert.alert(
       "Produit ajouté ! 🎉",
       `${brand} – ${name} a été soumis à la communauté SkinScan. Il sera analysé et disponible prochainement.`,
-      [{ text: "OK", onPress: () => router.back() }]
+      [{ text: "OK", onPress: () => router.canGoBack() ? router.back() : router.replace("/(tabs)") }]
     );
   };
 
@@ -64,7 +64,7 @@ export default function AddProductScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: colors.border }]}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace("/(tabs)")}
           style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           hitSlop={12}
         >

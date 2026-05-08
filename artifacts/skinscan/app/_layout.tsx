@@ -6,7 +6,8 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import * as Linking from "expo-linking";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -22,9 +23,41 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+function LinkingHandler() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleUrl = (url: string) => {
+      if (!url) return;
+      // External product URL received via Android VIEW intent
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        router.push(`/import-product?url=${encodeURIComponent(url)}`);
+        return;
+      }
+      // Deep link: skinscan://import-product?url=...&text=...
+      const parsed = Linking.parse(url);
+      if (parsed.path === "import-product") {
+        const params = parsed.queryParams as Record<string, string>;
+        const qs = new URLSearchParams(params).toString();
+        router.push(`/import-product?${qs}`);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleUrl(url);
+    });
+
+    const sub = Linking.addEventListener("url", ({ url }) => handleUrl(url));
+    return () => sub.remove();
+  }, []);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <LinkingHandler />
       <Stack.Screen name="index" />
       <Stack.Screen name="auth" options={{ animation: "fade" }} />
       <Stack.Screen name="onboarding" />
